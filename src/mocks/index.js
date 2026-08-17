@@ -10,8 +10,17 @@ import therapists from './therapists';
 import rooms from './rooms';
 import customer from './customer';
 import therapistMock from './therapist';
+import admin from './admin';
 
-export { services, cosmetics, therapists, rooms, customer, therapistMock };
+export {
+  services,
+  cosmetics,
+  therapists,
+  rooms,
+  customer,
+  therapistMock,
+  admin,
+};
 
 export default {
   services,
@@ -20,4 +29,5 @@ export default {
   rooms,
   customer,
   therapist: therapistMock,
+  admin,
 };

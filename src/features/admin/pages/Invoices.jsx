@@ -38,6 +38,7 @@ const STATUS_FILTERS = [
 const PAYMENT_METHODS = [
   { value: 'CASH', label: 'Tiền mặt', hint: 'Khách thanh toán tại quầy' },
   { value: 'BANK_TRANSFER', label: 'Chuyển khoản', hint: 'Chuyển khoản ngân hàng' },
+  { value: 'CARD', label: 'Thẻ', hint: 'Quẹt thẻ / máy POS' },
 ];
 
 // =========================================================
@@ -148,6 +149,7 @@ const getPaymentLabel = (method) => {
   switch (method) {
     case 'CASH': return 'Tiền mặt';
     case 'BANK_TRANSFER': return 'Chuyển khoản';
+    case 'CARD': return 'Thẻ';
     default: return method || '-';
   }
 };
@@ -1284,15 +1286,14 @@ function AdminInvoices() {
       />
 
       <PaymentModal
-        isOpen={!!paymentTarget}
+        isOpen={!!paymentTarget && !showPaymentConfirm}
         invoice={paymentTarget}
         method={paymentMethod}
         onMethodChange={setPaymentMethod}
         onClose={closePaymentModal}
         onProceed={() => {
-          // Closing the picker triggers the ConfirmDialog render path.
-          setPaymentTarget(null);
-          setTimeout(() => setShowPaymentConfirm(true), 50);
+          // Show the confirm dialog while keeping paymentTarget available.
+          setShowPaymentConfirm(true);
         }}
       />
 
@@ -1300,6 +1301,7 @@ function AdminInvoices() {
         target={showPaymentConfirm ? paymentTarget : null}
         method={paymentMethod}
         onClose={() => {
+          // Returning to the picker rather than dismissing the flow.
           setShowPaymentConfirm(false);
           setPaymentError(null);
         }}

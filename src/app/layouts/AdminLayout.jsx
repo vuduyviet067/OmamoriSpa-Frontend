@@ -1,4 +1,4 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useCallback } from 'react';
 import clsx from 'clsx';
 import { useAuth, ROLES, ROLE_LABELS } from '@/features/auth/context';
@@ -191,7 +191,7 @@ function ProfileMenu({ onClose }) {
   );
 }
 
-function AdminLayout({ children }) {
+function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -476,7 +476,7 @@ function AdminLayout({ children }) {
           </div>
         </header>
 
-        <div className="dashboard-content admin-content">{children}</div>
+        <div className="dashboard-content admin-content"><Outlet /></div>
       </div>
     </div>
   );

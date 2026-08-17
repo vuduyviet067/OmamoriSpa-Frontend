@@ -506,7 +506,7 @@ function AdminReports() {
   const derivedKpis = useMemo(() => {
     if (!overview) return null;
     const fromBackend = readBackendKpis(overview);
-    if (fromBackend && fromBackend.revenue) {
+    if (fromBackend && (fromBackend.revenue || fromBackend.appointmentCount)) {
       return fromBackend;
     }
     return null;
