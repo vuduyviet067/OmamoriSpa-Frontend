@@ -3,7 +3,14 @@
 
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8888/api/omamori';
+
+// Storage keys kept stable across mock and real modes so AuthContext
+// session-restore and the Authorization header stay in sync.
+export const STORAGE_KEYS = {
+  USER: 'omamori_user',
+  TOKEN: 'omamori_accessToken',
+};
 
 // Create axios instance
 const apiClient = axios.create({
@@ -17,7 +24,7 @@ const apiClient = axios.create({
 // Request interceptor - Add auth token
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('omamori_accessToken');
+    const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -37,8 +44,10 @@ apiClient.interceptors.response.use(
 
       switch (status) {
         case 401:
-          localStorage.removeItem('omamori_accessToken');
-          localStorage.removeItem('omamori_user');
+          // Token invalid / expired - clear session and bounce to login.
+          // Do NOT mock-fallback here; UI must surface the real error.
+          localStorage.removeItem(STORAGE_KEYS.TOKEN);
+          localStorage.removeItem(STORAGE_KEYS.USER);
           if (window.location.pathname !== '/login') {
             window.location.href = '/login';
           }

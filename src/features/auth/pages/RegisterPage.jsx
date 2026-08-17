@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/features/auth/context';
-import { Button, Input } from '@/components/common';
+import { Button, Input, Select } from '@/components/common';
 import './RegisterPage.css';
 
 function RegisterPage() {
   const [formData, setFormData] = useState({
-    name: '',
+    fullName: '',
     phone: '',
     email: '',
-    username: '',
+    dateOfBirth: '',
+    gender: '',
+    address: '',
     password: '',
     confirmPassword: '',
   });
@@ -22,22 +24,20 @@ function RegisterPage() {
   const navigate = useNavigate();
 
   const handleChange = (field) => (e) => {
-    setFormData(prev => ({ ...prev, [field]: e.target.value }));
-    // Clear error when user types
+    setFormData((prev) => ({ ...prev, [field]: e.target.value }));
     if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
+      setErrors((prev) => ({ ...prev, [field]: '' }));
     }
   };
 
-  // Validation functions
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
   };
 
+  // Backend regex: ^(0|\+84)[0-9]{9,10}$
   const validatePhone = (phone) => {
-    // Vietnamese phone: 10 digits, starting with 0
-    const phoneRegex = /^(0[0-9]{9})$/;
+    const phoneRegex = /^(0|\+84)[0-9]{9,10}$/;
     return phoneRegex.test(phone.replace(/\s/g, ''));
   };
 
@@ -52,7 +52,7 @@ function RegisterPage() {
 
   const getPasswordStrength = (password) => {
     if (!password) return { level: 0, text: '', color: '' };
-    
+
     let strength = 0;
     if (password.length >= 6) strength++;
     if (password.length >= 8) strength++;
@@ -68,44 +68,50 @@ function RegisterPage() {
   const validate = () => {
     const newErrors = {};
 
-    // Name validation
-    if (!formData.name.trim()) {
-      newErrors.name = 'Vui lòng nhập họ tên';
-    } else if (formData.name.trim().length < 2) {
-      newErrors.name = 'Họ tên phải có ít nhất 2 ký tự';
+    if (!formData.fullName.trim()) {
+      newErrors.fullName = 'Vui lòng nhập họ tên';
+    } else if (formData.fullName.trim().length < 2) {
+      newErrors.fullName = 'Họ tên phải có ít nhất 2 ký tự';
     }
 
-    // Phone validation
     if (!formData.phone.trim()) {
       newErrors.phone = 'Vui lòng nhập số điện thoại';
     } else if (!validatePhone(formData.phone)) {
-      newErrors.phone = 'Số điện thoại không hợp lệ (phải có 10 chữ số, bắt đầu bằng 0)';
+      newErrors.phone = 'Số điện thoại không hợp lệ (bắt đầu bằng 0 hoặc +84, 10-11 chữ số)';
     }
 
-    // Email validation
     if (!formData.email.trim()) {
       newErrors.email = 'Vui lòng nhập email';
     } else if (!validateEmail(formData.email)) {
       newErrors.email = 'Email không đúng định dạng';
     }
 
-    // Username validation
-    if (!formData.username.trim()) {
-      newErrors.username = 'Vui lòng nhập tên đăng nhập';
-    } else if (formData.username.trim().length < 3) {
-      newErrors.username = 'Tên đăng nhập phải có ít nhất 3 ký tự';
-    } else if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
-      newErrors.username = 'Tên đăng nhập chỉ chứa chữ cái, số và dấu gạch dưới';
+    // Backend enforces @Past, so today must be after the chosen date.
+    if (!formData.dateOfBirth) {
+      newErrors.dateOfBirth = 'Vui lòng chọn ngày sinh';
+    } else {
+      const picked = new Date(formData.dateOfBirth);
+      if (Number.isNaN(picked.getTime()) || picked >= new Date()) {
+        newErrors.dateOfBirth = 'Ngày sinh phải là một ngày trong quá khứ';
+      }
     }
 
-    // Password validation
+    if (!formData.gender) {
+      newErrors.gender = 'Vui lòng chọn giới tính';
+    } else if (!['MALE', 'FEMALE', 'OTHER'].includes(formData.gender)) {
+      newErrors.gender = 'Giới tính không hợp lệ';
+    }
+
+    if (!formData.address.trim()) {
+      newErrors.address = 'Vui lòng nhập địa chỉ';
+    }
+
     if (!formData.password) {
       newErrors.password = 'Vui lòng nhập mật khẩu';
     } else if (!validatePassword(formData.password)) {
       newErrors.password = 'Mật khẩu phải có ít nhất 6 ký tự, gồm chữ hoa, chữ thường và số';
     }
 
-    // Confirm password validation
     if (!formData.confirmPassword) {
       newErrors.confirmPassword = 'Vui lòng xác nhận mật khẩu';
     } else if (formData.password !== formData.confirmPassword) {
@@ -127,22 +133,24 @@ function RegisterPage() {
 
     try {
       await register({
-        name: formData.name.trim(),
+        fullName: formData.fullName.trim(),
         phone: formData.phone.trim(),
         email: formData.email.trim().toLowerCase(),
-        username: formData.username.trim(),
+        dateOfBirth: formData.dateOfBirth,
+        gender: formData.gender,
+        address: formData.address.trim(),
         password: formData.password,
       });
 
       setSuccessMessage('Đăng ký thành công! Đang chuyển hướng...');
-      
-      // Redirect to login after short delay
+
+      // Backend register does NOT return a token, so redirect to login only.
       setTimeout(() => {
-        navigate('/login', { 
-          state: { 
+        navigate('/login', {
+          state: {
             registered: true,
-            username: formData.username 
-          } 
+            email: formData.email.trim().toLowerCase(),
+          },
         });
       }, 1500);
     } catch (error) {
@@ -159,6 +167,14 @@ function RegisterPage() {
   };
 
   const passwordStrength = getPasswordStrength(formData.password);
+
+  const genderOptions = [
+    { value: 'MALE', label: 'Nam' },
+    { value: 'FEMALE', label: 'Nữ' },
+    { value: 'OTHER', label: 'Khác' },
+  ];
+
+  const today = new Date().toISOString().split('T')[0];
 
   return (
     <div className="auth-page">
@@ -236,19 +252,21 @@ function RegisterPage() {
                 <Input
                   label="Họ và tên"
                   type="text"
-                  value={formData.name}
-                  onChange={handleChange('name')}
+                  name="fullName"
+                  value={formData.fullName}
+                  onChange={handleChange('fullName')}
                   placeholder="Nguyễn Văn A"
-                  error={errors.name}
+                  error={errors.fullName}
                   autoComplete="name"
                 />
 
                 <Input
                   label="Số điện thoại"
                   type="tel"
+                  name="phone"
                   value={formData.phone}
                   onChange={handleChange('phone')}
-                  placeholder="0901 234 567"
+                  placeholder="0901234567 hoặc +84901234567"
                   error={errors.phone}
                   autoComplete="tel"
                 />
@@ -256,6 +274,7 @@ function RegisterPage() {
                 <Input
                   label="Email"
                   type="email"
+                  name="email"
                   value={formData.email}
                   onChange={handleChange('email')}
                   placeholder="email@example.com"
@@ -264,33 +283,56 @@ function RegisterPage() {
                 />
 
                 <Input
-                  label="Tên đăng nhập"
+                  label="Ngày sinh"
+                  type="date"
+                  name="dateOfBirth"
+                  value={formData.dateOfBirth}
+                  onChange={handleChange('dateOfBirth')}
+                  error={errors.dateOfBirth}
+                  max={today}
+                  autoComplete="bday"
+                />
+
+                <Select
+                  label="Giới tính"
+                  name="gender"
+                  value={formData.gender}
+                  onChange={handleChange('gender')}
+                  options={genderOptions}
+                  placeholder="Chọn giới tính"
+                  error={errors.gender}
+                />
+
+                <Input
+                  label="Địa chỉ"
                   type="text"
-                  value={formData.username}
-                  onChange={handleChange('username')}
-                  placeholder="username"
-                  error={errors.username}
-                  autoComplete="username"
+                  name="address"
+                  value={formData.address}
+                  onChange={handleChange('address')}
+                  placeholder="Số nhà, đường, phường, quận, thành phố"
+                  error={errors.address}
+                  autoComplete="street-address"
                 />
 
                 <div className="input-group">
                   <Input
                     label="Mật khẩu"
                     type="password"
+                    name="password"
                     value={formData.password}
                     onChange={handleChange('password')}
-                    placeholder=" Ít nhất 6 ký tự, có hoa thường và số"
+                    placeholder="Ít nhất 6 ký tự, có hoa thường và số"
                     error={errors.password}
                     autoComplete="new-password"
                   />
                   {formData.password && (
                     <div className="password-strength">
                       <div className="password-strength-bar">
-                        <div 
+                        <div
                           className="password-strength-fill"
-                          style={{ 
+                          style={{
                             width: `${(passwordStrength.level / 3) * 100}%`,
-                            backgroundColor: passwordStrength.color 
+                            backgroundColor: passwordStrength.color,
                           }}
                         />
                       </div>
@@ -321,6 +363,7 @@ function RegisterPage() {
                 <Input
                   label="Xác nhận mật khẩu"
                   type="password"
+                  name="confirmPassword"
                   value={formData.confirmPassword}
                   onChange={handleChange('confirmPassword')}
                   placeholder="Nhập lại mật khẩu"
