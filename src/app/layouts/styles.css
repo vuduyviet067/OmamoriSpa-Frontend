@@ -1,0 +1,498 @@
+/* ============================================
+   Public Layout Styles
+   ============================================ */
+
+:root {
+  --public-header-height: 72px;
+}
+
+.public-layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.public-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background-color: var(--color-ivory-header);
+  border-bottom: 1px solid var(--color-border);
+  overflow-x: hidden;
+}
+
+.public-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--public-header-height);
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 var(--space-6);
+  gap: var(--space-6);
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.public-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-green-deep);
+  flex-shrink: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.public-logo:hover {
+  opacity: 0.8;
+}
+
+.public-logo-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--color-gold);
+}
+
+.public-logo-text {
+  font-family: var(--font-heading);
+  font-size: var(--text-base);
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  color: var(--color-green-deep);
+  white-space: nowrap;
+}
+
+/* Navigation Links */
+.public-nav-links {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.public-nav-link {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: normal;
+  word-spacing: normal;
+  color: var(--color-charcoal-light);
+  transition: color var(--transition-fast);
+  padding: var(--space-2) 0;
+  position: relative;
+}
+
+.public-nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background-color: var(--color-gold);
+  transition: width var(--transition-fast);
+}
+
+.public-nav-link:hover {
+  color: var(--color-green-deep);
+}
+
+.public-nav-link:hover::after {
+  width: 100%;
+}
+
+.public-nav-link.active {
+  color: var(--color-green-deep);
+}
+
+.public-nav-link.active::after {
+  width: 100%;
+}
+
+/* Navigation Actions */
+.public-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.public-nav-login {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-charcoal-light);
+  transition: color var(--transition-fast);
+}
+
+.public-nav-login:hover {
+  color: var(--color-green-deep);
+}
+
+.nav-user-greeting {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-charcoal-light);
+}
+
+/* Main Content */
+.public-main {
+  flex: 1;
+  background-color: var(--color-ivory);
+}
+
+/* ============================================
+   Footer — Deep Spa Green
+   Local tokens (override only inside the footer):
+   - Background: #1F5744 (deep spa green, closer to brand CTA than #174C3A but
+     visibly darker than --color-green-deep). No gradient/image.
+   - Heading text: ivory cream (#F6F0E5), letter-spacing reserved for the
+     short uppercase section titles — never for Vietnamese sentence copy.
+   - Body text: rgba(246, 240, 229, 0.82) — readable cream on green.
+   - Link hover: warm gold #D6B36A (accent, not body).
+   ============================================ */
+.public-footer {
+  --footer-bg: #1F5744;
+  --footer-title: #F6F0E5;
+  --footer-body: rgba(246, 240, 229, 0.82);
+  --footer-body-strong: rgba(246, 240, 229, 0.95);
+  --footer-link-hover: #D6B36A;
+  --footer-divider: rgba(255, 255, 255, 0.12);
+
+  background-color: var(--footer-bg);
+  color: var(--footer-body);
+  margin-top: auto;
+  padding: 60px 24px 24px;
+  font-family: var(--font-body);
+}
+
+.public-footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.public-footer-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1.3fr;
+  gap: 56px;
+}
+
+/* Generic column */
+.public-footer-col {
+  min-width: 0;
+}
+
+/* Footer section heading (uppercase, slight tracking only here) */
+.public-footer-heading {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--footer-title);
+  margin: 0 0 18px;
+  line-height: 1.4;
+}
+
+/* Brand column */
+.public-footer-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--footer-title);
+  margin-bottom: 18px;
+}
+
+.public-footer-logo-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  color: #D6B36A;
+}
+
+.public-footer-logo-text {
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  color: var(--footer-title);
+  white-space: nowrap;
+}
+
+.public-footer-tagline {
+  font-family: var(--font-heading);
+  font-style: italic;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--footer-body-strong);
+  margin: 0;
+  max-width: 280px;
+  /* Vietnamese-safe — no per-glyph letter spacing on prose. */
+  letter-spacing: normal;
+  word-spacing: normal;
+}
+
+/* Lists (Liên kết, Thông tin) */
+.public-footer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.public-footer-list li a,
+.public-footer-list li span {
+  display: inline-block;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--footer-body);
+  transition: color var(--transition-fast);
+}
+
+.public-footer-list li a:hover,
+.public-footer-list li a:focus-visible {
+  color: var(--footer-link-hover);
+}
+
+/* Contact column */
+.public-footer-contact {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.public-footer-contact-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--footer-body);
+}
+
+.public-footer-contact-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--footer-title);
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.public-footer-contact-item > span:last-child {
+  color: var(--footer-body);
+}
+
+.public-footer-contact-hours {
+  align-items: flex-start;
+}
+
+.public-footer-hours {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--footer-body);
+}
+
+/* Bottom bar */
+.public-footer-bottom {
+  max-width: 1200px;
+  margin: 40px auto 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--footer-divider);
+  text-align: center;
+}
+
+.public-footer-bottom p {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: normal;
+  word-spacing: normal;
+  color: var(--footer-body-strong);
+}
+
+/* Mobile Menu Button */
+.mobile-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  color: var(--color-charcoal);
+  transition: background-color var(--transition-fast);
+}
+
+.mobile-menu-btn:hover {
+  background-color: var(--color-ivory-dark);
+}
+
+/* Mobile Drawer */
+.drawer-overlay {
+  display: none;
+  pointer-events: none;
+}
+
+.drawer-overlay.open {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  background-color: rgba(44, 44, 44, 0.4);
+}
+
+.mobile-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 320px;
+  max-width: 85vw;
+  height: 100vh;
+  background-color: white;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform var(--transition-normal);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.1);
+}
+
+.mobile-drawer.open {
+  transform: translateX(0);
+}
+
+.mobile-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+  height: var(--public-header-height);
+}
+
+.mobile-drawer-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  color: var(--color-charcoal);
+  transition: background-color var(--transition-fast);
+}
+
+.mobile-drawer-close:hover {
+  background-color: var(--color-ivory-dark);
+}
+
+.mobile-drawer-nav {
+  flex: 1;
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  overflow-y: auto;
+}
+
+.mobile-nav-link {
+  display: block;
+  padding: var(--space-4) var(--space-4);
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--color-charcoal-light);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.mobile-nav-link:hover {
+  background-color: var(--color-ivory-dark);
+  color: var(--color-charcoal);
+}
+
+.mobile-nav-link.active {
+  background-color: var(--color-green-pale);
+  color: var(--color-green-deep);
+}
+
+.mobile-drawer-actions {
+  padding: var(--space-6);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.mobile-action-link {
+  display: block;
+  padding: var(--space-4);
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--color-charcoal-light);
+  text-align: center;
+  transition: color var(--transition-fast);
+}
+
+.mobile-action-link:hover {
+  color: var(--color-green-deep);
+}
+
+/* Responsive Styles */
+@media (max-width: 1023px) {
+  .public-nav-links {
+    display: none;
+  }
+
+  .public-nav-actions {
+    display: none;
+  }
+
+  .mobile-menu-btn {
+    display: flex;
+  }
+
+  .drawer-overlay {
+    display: block;
+  }
+
+  .drawer-overlay.open {
+    pointer-events: all;
+  }
+
+  /* Tablet footer: 2 columns */
+  .public-footer-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 40px 48px;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Mobile footer: single column, padded */
+  .public-footer {
+    padding: 48px 24px 24px;
+  }
+
+  .public-footer-grid {
+    grid-template-columns: 1fr;
+    gap: 30px;
+  }
+
+  .public-footer-col {
+    text-align: left;
+  }
+
+  .public-footer-bottom {
+    margin-top: 32px;
+    padding-top: 20px;
+  }
+}

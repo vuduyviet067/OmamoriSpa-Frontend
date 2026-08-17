@@ -1,0 +1,1469 @@
+/* ============================================
+   Customer Portal Styles
+   Warm, spa-like feel for customer area
+   ============================================ */
+
+/* Greeting Section */
+.customer-greeting {
+  margin-bottom: var(--space-8);
+}
+
+.customer-greeting h1 {
+  font-family: var(--font-heading);
+  font-size: var(--text-3xl);
+  font-weight: 500;
+  color: var(--color-charcoal);
+  margin-bottom: var(--space-2);
+}
+
+.customer-greeting p {
+  font-size: var(--text-base);
+  color: var(--color-charcoal-muted);
+  margin-bottom: 0;
+}
+
+/* Appointment Cards — warm ivory surface */
+.appointment-card {
+  background: #FFFDF8;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+.appointment-card:hover {
+  border-color: var(--color-green-medium);
+  box-shadow: var(--shadow-sm);
+  transform: none;
+}
+
+.appointment-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+
+.appointment-card-service {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-charcoal);
+}
+
+.appointment-card-datetime {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+  color: var(--color-charcoal-muted);
+  font-size: var(--text-sm);
+}
+
+.appointment-card-datetime svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  color: var(--customer-sidebar-muted);
+}
+
+.appointment-card-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-light);
+}
+
+.appointment-card-detail {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.appointment-card-detail svg {
+  width: 14px;
+  height: 14px;
+  color: var(--color-charcoal-muted);
+}
+
+.appointment-card-actions {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-light);
+}
+
+/* Section Headers */
+.customer-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-5);
+}
+
+.customer-section-title {
+  font-family: var(--font-heading);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--color-charcoal);
+}
+
+.customer-section-link {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-green-deep);
+  transition: opacity var(--transition-fast);
+}
+
+.customer-section-link:hover {
+  opacity: 0.8;
+}
+
+/* Quick Actions */
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+}
+
+.quick-action-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.quick-action-card:hover {
+  border-color: var(--color-green-medium);
+  box-shadow: var(--shadow-sm);
+  background-color: var(--color-green-pale);
+}
+
+.quick-action-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-green-pale);
+  color: var(--color-green-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.quick-action-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.quick-action-content h4 {
+  font-family: var(--font-heading);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-charcoal);
+  margin-bottom: var(--space-1);
+}
+
+.quick-action-content p {
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+  margin-bottom: 0;
+}
+
+/* Transaction List */
+.transaction-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.transaction-item:last-child {
+  border-bottom: none;
+}
+
+.transaction-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.transaction-service {
+  font-weight: 500;
+  color: var(--color-charcoal);
+}
+
+.transaction-date {
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+}
+
+.transaction-amount {
+  font-weight: 600;
+  color: var(--color-charcoal);
+}
+
+.transaction-amount.paid {
+  color: var(--color-success);
+}
+
+/* Customer Stats (subtle) */
+.customer-stats {
+  display: flex;
+  gap: var(--space-6);
+  padding: var(--space-4) 0;
+  margin-bottom: var(--space-6);
+}
+
+.customer-stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.customer-stat-value {
+  font-family: var(--font-heading);
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  color: var(--color-green-deep);
+}
+
+.customer-stat-label {
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+}
+
+/* Customer Content Cards — warm ivory surface */
+.customer-card {
+  background: #FFFDF8;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  margin-bottom: var(--space-6);
+}
+
+.customer-card-title {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-charcoal);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+/* Appointment List (compact) */
+.appointment-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.appointment-list-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: #FFFDF8;
+  border-radius: var(--radius-md);
+  transition: background-color var(--transition-fast);
+  border: 1px solid var(--color-border);
+}
+
+.appointment-list-item:hover {
+  background: #F8F5EE;
+}
+
+.appointment-list-datetime {
+  min-width: 80px;
+  text-align: center;
+  padding: var(--space-2) var(--space-3);
+  background: white;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+}
+
+.appointment-list-date {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--color-charcoal);
+}
+
+.appointment-list-time {
+  font-size: var(--text-xs);
+  color: var(--color-charcoal-muted);
+}
+
+.appointment-list-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.appointment-list-service {
+  font-weight: 500;
+  color: var(--color-charcoal);
+  margin-bottom: var(--space-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.appointment-list-meta {
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+}
+
+/* Profile Form */
+.profile-form {
+  max-width: 480px;
+}
+
+.profile-form .input-group {
+  margin-bottom: var(--space-5);
+}
+
+.profile-form-actions {
+  display: flex;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-light);
+}
+
+.customer-card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.customer-card-title-row .customer-card-title {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.profile-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: white;
+  color: var(--color-charcoal);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.profile-edit-btn:hover {
+  border-color: var(--color-green-medium);
+  color: var(--color-green-deep);
+  background: var(--color-green-pale);
+}
+
+.profile-edit-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.profile-edit-action-btn {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: 1px solid var(--color-border);
+  background: white;
+  color: var(--color-charcoal);
+}
+
+.profile-edit-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.profile-edit-action-btn.cancel:hover:not(:disabled) {
+  border-color: var(--color-charcoal-muted);
+}
+
+.profile-edit-action-btn.save {
+  background: var(--color-green-deep);
+  color: white;
+  border-color: var(--color-green-deep);
+}
+
+.profile-edit-action-btn.save:hover:not(:disabled) {
+  background: var(--color-green-medium);
+  border-color: var(--color-green-medium);
+}
+
+/* Back to Home Link */
+.back-to-home {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+  margin-bottom: var(--space-4);
+  transition: color var(--transition-fast);
+}
+
+.back-to-home:hover {
+  color: var(--color-green-deep);
+}
+
+.back-to-home svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Mobile Bottom Navigation */
+.customer-bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-2) var(--space-4);
+  padding-bottom: calc(var(--space-2) + env(safe-area-inset-bottom, 0));
+  z-index: 100;
+}
+
+.customer-bottom-nav-items {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+
+.customer-bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  color: var(--color-charcoal-muted);
+  transition: color var(--transition-fast);
+  flex: 1;
+}
+
+.customer-bottom-nav-item.active {
+  color: var(--color-green-deep);
+}
+
+.customer-bottom-nav-item svg {
+  width: 24px;
+  height: 24px;
+}
+
+.customer-bottom-nav-item span {
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .customer-bottom-nav {
+    display: block;
+  }
+
+  .dashboard-main {
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0));
+  }
+}
+
+@media (max-width: 768px) {
+  .customer-greeting h1 {
+    font-size: var(--text-2xl);
+  }
+
+  .quick-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .appointment-card {
+    padding: var(--space-4);
+  }
+
+  .appointment-card-header {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .customer-card {
+    padding: var(--space-4);
+  }
+
+  .customer-stats {
+    flex-wrap: wrap;
+    gap: var(--space-4);
+  }
+}
+
+/* ============================================
+   Customer Tabs (Appointments list)
+   ============================================ */
+.customer-tabs {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.customer-tab {
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  background: transparent;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  color: var(--color-charcoal-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  min-height: 44px;
+}
+
+.customer-tab:hover {
+  color: var(--color-green-deep);
+}
+
+.customer-tab.is-active {
+  color: var(--color-green-deep);
+  border-bottom-color: var(--color-green-deep);
+}
+
+/* ============================================
+   Appointment List Item - Rich
+   ============================================ */
+.appointment-list-item-rich {
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.appointment-list-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+}
+
+.appointment-list-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.appointment-list-meta-item svg {
+  flex-shrink: 0;
+}
+
+.appointment-list-status-mobile {
+  display: none;
+  margin-top: var(--space-2);
+}
+
+.appointment-list-status-desktop {
+  display: inline-flex;
+}
+
+.appointment-list-trailing {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.appointment-list-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.appointment-list-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) var(--space-3);
+  min-height: 36px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: white;
+  color: var(--color-charcoal);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-decoration: none;
+}
+
+.appointment-list-action:hover {
+  border-color: var(--color-green-medium);
+  color: var(--color-green-deep);
+}
+
+.appointment-list-action-primary {
+  background: var(--color-green-deep);
+  color: white;
+  border-color: var(--color-green-deep);
+}
+
+.appointment-list-action-primary:hover {
+  background: var(--color-green-medium);
+  border-color: var(--color-green-medium);
+  color: white;
+}
+
+.appointment-list-action-danger {
+  background: white;
+  color: var(--color-error);
+  border-color: rgba(184, 84, 80, 0.3);
+}
+
+.appointment-list-action-danger:hover {
+  background: rgba(184, 84, 80, 0.08);
+  border-color: var(--color-error);
+}
+
+/* ============================================
+   Booking Alerts
+   ============================================ */
+.booking-alert {
+  padding: var(--space-4);
+  margin-bottom: var(--space-6);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.booking-alert-success {
+  background-color: rgba(61, 122, 90, 0.1);
+  color: var(--color-success);
+  border: 1px solid rgba(61, 122, 90, 0.25);
+}
+
+.booking-alert-warning {
+  background-color: rgba(201, 169, 89, 0.12);
+  color: #8a6f30;
+  border: 1px solid rgba(201, 169, 89, 0.35);
+}
+
+.booking-alert-error {
+  background-color: rgba(184, 84, 80, 0.1);
+  color: var(--color-error);
+  border: 1px solid rgba(184, 84, 80, 0.25);
+}
+
+/* ============================================
+   Booking Stepper
+   ============================================ */
+.booking-stepper {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: step;
+}
+
+.booking-stepper-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  flex: 1;
+  max-width: 200px;
+}
+
+.booking-stepper-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-ivory-dark);
+  border: 2px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-charcoal-muted);
+  position: relative;
+  z-index: 1;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.booking-stepper-number {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.booking-stepper-label {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+  text-align: center;
+  font-weight: 400;
+  transition: color var(--transition-fast);
+  white-space: nowrap;
+}
+
+.booking-stepper-connector {
+  position: absolute;
+  top: 18px;
+  left: calc(50% + 18px);
+  right: calc(-50% + 18px);
+  height: 2px;
+  z-index: 0;
+}
+
+.booking-stepper-line {
+  width: 100%;
+  height: 100%;
+  background: var(--color-border);
+}
+
+/* Active step */
+.booking-stepper-item.active .booking-stepper-circle {
+  background: var(--color-green-deep);
+  border-color: var(--color-green-deep);
+  color: white;
+}
+
+.booking-stepper-item.active .booking-stepper-label {
+  color: var(--color-green-deep);
+  font-weight: 600;
+}
+
+/* Done step */
+.booking-stepper-item.done .booking-stepper-circle {
+  background: var(--color-green-deep);
+  border-color: var(--color-green-deep);
+  color: white;
+}
+
+.booking-stepper-item.done .booking-stepper-connector .booking-stepper-line {
+  background: var(--color-green-deep);
+}
+
+/* Mobile stepper */
+@media (max-width: 768px) {
+  .booking-stepper {
+    gap: 0;
+  }
+
+  .booking-stepper-item {
+    max-width: none;
+  }
+
+  .booking-stepper-label {
+    font-size: var(--text-xs);
+  }
+
+  .booking-stepper-circle {
+    width: 32px;
+    height: 32px;
+  }
+
+  .booking-stepper-connector {
+    top: 16px;
+    left: calc(50% + 16px);
+    right: calc(-50% + 16px);
+  }
+}
+
+/* ============================================
+   Booking Step Content
+   ============================================ */
+.booking-step-content {
+  margin-bottom: var(--space-8);
+  min-height: 240px;
+}
+
+.booking-actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border-light);
+}
+
+.booking-empty {
+  padding: var(--space-8);
+  text-align: center;
+  background: var(--color-ivory);
+  border-radius: var(--radius-md);
+  color: var(--color-charcoal-muted);
+}
+
+/* ============================================
+   Booking Grid (service / therapist / room cards)
+   ============================================ */
+.booking-grid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.booking-grid-services {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.booking-grid-therapists {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.booking-grid-rooms {
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+}
+
+.booking-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: white;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--transition-fast);
+  min-height: 48px;
+}
+
+.booking-card:hover {
+  border-color: var(--color-green-medium);
+  box-shadow: var(--shadow-sm);
+}
+
+.booking-card.is-selected {
+  border-color: var(--color-green-deep);
+  background: var(--color-green-pale);
+  box-shadow: var(--shadow-md);
+}
+
+.booking-card-image {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-green-pale);
+}
+
+.booking-card-image img,
+.booking-card-image div {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.booking-card-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--color-green-pale);
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.booking-card-avatar img,
+.booking-card-avatar div {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.booking-card-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-green-pale);
+  color: var(--color-green-deep);
+  align-self: center;
+}
+
+.booking-card-therapist,
+.booking-card-room {
+  align-items: center;
+  text-align: center;
+}
+
+.booking-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+}
+
+.booking-card-title {
+  font-family: var(--font-heading);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-charcoal);
+  line-height: var(--leading-tight);
+}
+
+.booking-card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+}
+
+.booking-card-meta-single {
+  justify-content: center;
+}
+
+.booking-card-price {
+  font-weight: 600;
+  color: var(--color-green-deep);
+}
+
+.booking-card-desc {
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+  margin: 0;
+  line-height: var(--leading-normal);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.booking-card-check {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-green-deep);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ============================================
+   Room + Time section
+   ============================================ */
+.booking-room-time {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.booking-section-title {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-charcoal);
+  margin-bottom: var(--space-4);
+}
+
+.booking-datetime {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+/* ============================================
+   Booking Summary (Step 4)
+   ============================================ */
+.booking-summary {
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.booking-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.booking-summary-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.booking-summary-label {
+  color: var(--color-charcoal-muted);
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+.booking-summary-value {
+  font-weight: 500;
+  color: var(--color-charcoal);
+  text-align: right;
+}
+
+.booking-summary-value small {
+  display: block;
+  color: var(--color-charcoal-muted);
+  font-weight: 400;
+  margin-top: var(--space-1);
+}
+
+.booking-summary-total {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-4);
+  margin-top: var(--space-2);
+}
+
+.booking-summary-price {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  color: var(--color-green-deep);
+}
+
+/* ============================================
+   Booking Detail Card
+   ============================================ */
+.booking-detail-card {
+  padding: var(--space-6);
+  background: #FFFDF8;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.booking-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.booking-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4) var(--space-6);
+  margin-bottom: var(--space-6);
+}
+
+.booking-detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.booking-detail-label {
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+}
+
+.booking-detail-value {
+  font-weight: 500;
+  color: var(--color-charcoal);
+  font-size: var(--text-base);
+}
+
+.booking-detail-price {
+  font-family: var(--font-heading);
+  color: var(--color-green-deep);
+  font-size: var(--text-lg);
+}
+
+.booking-detail-actions {
+  display: flex;
+  gap: var(--space-3);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border-light);
+  flex-wrap: wrap;
+}
+
+/* ============================================
+   Responsive - Booking + List
+   ============================================ */
+@media (max-width: 768px) {
+  .booking-stepper {
+    padding: var(--space-3);
+  }
+
+  .booking-stepper-label {
+    display: none;
+  }
+
+  .booking-stepper-line {
+    width: 16px;
+  }
+
+  .booking-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .booking-actions .btn {
+    width: 100%;
+  }
+
+  .booking-datetime {
+    grid-template-columns: 1fr;
+  }
+
+  .booking-summary-row {
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .booking-summary-value {
+    text-align: left;
+  }
+
+  .booking-detail-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .appointment-list-item-rich {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+
+  .appointment-list-datetime {
+    min-width: auto;
+    display: flex;
+    gap: var(--space-3);
+    align-items: center;
+    justify-content: flex-start;
+  }
+
+  .appointment-list-status-desktop {
+    display: none;
+  }
+
+  .appointment-list-status-mobile {
+    display: block;
+  }
+
+  .appointment-list-trailing {
+    margin-left: 0;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .appointment-list-actions {
+    justify-content: stretch;
+  }
+
+  .appointment-list-action {
+    flex: 1;
+    min-height: 40px;
+  }
+}
+
+/* ============================================
+   Profile - Identity (read-only)
+   ============================================ */
+.profile-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-6);
+}
+
+.profile-identity-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background-color: var(--color-green-pale);
+  color: var(--color-green-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.profile-identity-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-identity-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.profile-identity-name {
+  font-family: var(--font-heading);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--color-charcoal);
+}
+
+.profile-identity-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.profile-identity-label {
+  color: var(--color-charcoal-muted);
+}
+
+.profile-identity-value {
+  font-weight: 500;
+  color: var(--color-charcoal);
+}
+
+/* ============================================
+   Transactions - Table + Cards
+   ============================================ */
+.transaction-table-card {
+  padding: 0;
+  overflow: hidden;
+  background: #FFFDF8;
+}
+
+.transaction-table th,
+.transaction-table td {
+  white-space: nowrap;
+}
+
+.transaction-table tbody tr {
+  cursor: pointer;
+}
+
+.transaction-row-action {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: white;
+  color: var(--color-green-deep);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.transaction-row-action:hover {
+  background-color: var(--color-green-pale);
+  border-color: var(--color-green-medium);
+}
+
+/* Mobile transaction cards (hidden by default, shown via media query) */
+.transaction-cards {
+  display: none;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.transaction-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  width: 100%;
+  font: inherit;
+  color: inherit;
+}
+
+.transaction-card:hover {
+  border-color: var(--color-green-medium);
+  box-shadow: var(--shadow-sm);
+}
+
+.transaction-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.transaction-card-code {
+  font-weight: 600;
+  color: var(--color-charcoal);
+}
+
+.transaction-card-service {
+  color: var(--color-charcoal-light);
+}
+
+.transaction-card-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.transaction-card-date {
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+}
+
+.transaction-card-amount {
+  font-weight: 600;
+  color: var(--color-charcoal);
+}
+
+.transaction-card-amount.paid {
+  color: var(--color-success);
+}
+
+/* ============================================
+   Transactions - Detail Modal
+   ============================================ */
+.transaction-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.transaction-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4) var(--space-6);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.transaction-detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.transaction-detail-section-title {
+  font-family: var(--font-heading);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-charcoal);
+  margin-bottom: var(--space-3);
+}
+
+.transaction-detail-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.transaction-detail-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.transaction-detail-item:last-child {
+  border-bottom: none;
+}
+
+.transaction-detail-item-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.transaction-detail-item-name {
+  font-weight: 500;
+  color: var(--color-charcoal);
+}
+
+.transaction-detail-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+}
+
+.transaction-detail-item-total {
+  font-weight: 600;
+  color: var(--color-charcoal);
+  white-space: nowrap;
+}
+
+.transaction-detail-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+}
+
+.transaction-detail-total strong {
+  color: var(--color-green-deep);
+}
+
+@media (max-width: 768px) {
+  .profile-identity {
+    padding: var(--space-4);
+    gap: var(--space-4);
+  }
+
+  .profile-identity-avatar {
+    width: 56px;
+    height: 56px;
+    font-size: var(--text-lg);
+  }
+
+  .transaction-table-card {
+    display: none;
+  }
+
+  .transaction-cards {
+    display: flex;
+  }
+
+  .transaction-detail-summary {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+}

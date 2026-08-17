@@ -1,0 +1,128 @@
+/* ============================================
+   Cosmetics Page Styles
+   ============================================ */
+
+.cosmetics-page {
+  padding: var(--space-12) var(--space-6);
+  min-height: calc(100vh - var(--header-height));
+  background-color: #FFFDF8;
+}
+
+/* Cosmetics Grid */
+.cosmetics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-6);
+  margin-top: var(--space-8);
+}
+
+.cosmetic-card {
+  background-color: white;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  transition: box-shadow var(--transition-normal), transform var(--transition-normal);
+  display: flex;
+  flex-direction: column;
+}
+
+.cosmetic-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-4px);
+}
+
+.cosmetic-card-image {
+  height: 220px;
+  overflow: hidden;
+  background-color: var(--color-ivory-dark);
+}
+
+.cosmetic-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--transition-slow);
+}
+
+.cosmetic-card:hover .cosmetic-card-image img {
+  transform: scale(1.05);
+}
+
+.cosmetic-card-content {
+  padding: var(--space-5);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.cosmetic-brand {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--color-gold);
+  font-weight: 600;
+}
+
+.cosmetic-card-title {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-charcoal);
+  margin: var(--space-2) 0 var(--space-3);
+  letter-spacing: normal;
+  word-spacing: normal;
+  /* Defensive: prevent mid-word breaks for Vietnamese text. */
+  word-break: normal;
+  overflow-wrap: normal;
+  word-wrap: normal;
+  hyphens: none;
+}
+
+.cosmetic-card-description {
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+  line-height: 1.5;
+  margin-bottom: var(--space-4);
+  flex: 1;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cosmetic-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.cosmetic-volume {
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+}
+
+.cosmetic-price {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-green-deep);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .cosmetics-page {
+    padding: var(--space-8) var(--space-4);
+  }
+
+  .cosmetics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+  }
+}
+
+@media (max-width: 480px) {
+  .cosmetics-grid {
+    grid-template-columns: 1fr;
+  }
+}

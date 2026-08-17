@@ -1,0 +1,175 @@
+/* ============================================
+   Service Detail Page Styles
+   ============================================ */
+
+.service-detail-page {
+  padding: var(--space-8) var(--space-6);
+  min-height: calc(100vh - var(--header-height));
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+  transition: color var(--transition-fast);
+  margin-bottom: var(--space-6);
+}
+
+.back-link:hover {
+  color: var(--color-green-deep);
+}
+
+.back-link svg {
+  flex-shrink: 0;
+}
+
+.service-detail-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-12);
+  align-items: start;
+}
+
+.service-detail-image {
+  position: sticky;
+  top: calc(var(--header-height) + var(--space-6));
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background-color: var(--color-green-pale);
+  aspect-ratio: 4/3;
+}
+
+.service-detail-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.service-detail-info {
+  padding: var(--space-4) 0;
+}
+
+.service-detail-title {
+  font-family: var(--font-heading);
+  font-size: var(--text-4xl);
+  font-weight: 600;
+  color: var(--color-charcoal);
+  letter-spacing: normal;
+  word-spacing: normal;
+  margin-bottom: var(--space-4);
+  /* Defensive: prevent mid-word breaks for Vietnamese text. */
+  word-break: normal;
+  overflow-wrap: normal;
+  word-wrap: normal;
+  hyphens: none;
+}
+
+.service-detail-description {
+  font-size: var(--text-base);
+  color: var(--color-charcoal-muted);
+  line-height: 1.7;
+  margin-bottom: var(--space-8);
+}
+
+.service-detail-meta {
+  display: flex;
+  gap: var(--space-8);
+  padding: var(--space-6);
+  background-color: var(--color-ivory-dark);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-8);
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.meta-label {
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+}
+
+.meta-value {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  color: var(--color-charcoal);
+}
+
+.meta-value.price {
+  color: var(--color-green-deep);
+}
+
+.service-benefits {
+  margin-bottom: var(--space-8);
+}
+
+.benefits-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-charcoal);
+  margin-bottom: var(--space-4);
+}
+
+.benefits-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.benefit-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-base);
+  color: var(--color-charcoal-light);
+}
+
+.benefit-item svg {
+  color: var(--color-green-medium);
+  flex-shrink: 0;
+}
+
+.service-detail-action {
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--color-border);
+}
+
+.action-note {
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+  margin-top: var(--space-3);
+  margin-bottom: 0;
+  text-align: center;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .service-detail-content {
+    grid-template-columns: 1fr;
+    gap: var(--space-8);
+  }
+
+  .service-detail-image {
+    position: static;
+    aspect-ratio: 16/9;
+  }
+}
+
+@media (max-width: 768px) {
+  .service-detail-page {
+    padding: var(--space-6) var(--space-4);
+  }
+
+  .service-detail-title {
+    font-size: var(--text-3xl);
+  }
+
+  .service-detail-meta {
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+}

@@ -1,0 +1,177 @@
+/* ============================================
+   Cosmetic Detail Page Styles
+   ============================================ */
+
+.cosmetic-detail-page {
+  padding: var(--space-8) var(--space-6);
+  min-height: calc(100vh - var(--header-height));
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+  transition: color var(--transition-fast);
+  margin-bottom: var(--space-6);
+}
+
+.back-link:hover {
+  color: var(--color-green-deep);
+}
+
+.back-link svg {
+  flex-shrink: 0;
+}
+
+.cosmetic-detail-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-12);
+  align-items: start;
+}
+
+.cosmetic-detail-image {
+  position: sticky;
+  top: calc(var(--header-height) + var(--space-6));
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background-color: var(--color-ivory-dark);
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cosmetic-detail-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cosmetic-detail-info {
+  padding: var(--space-4) 0;
+}
+
+.cosmetic-brand {
+  display: inline-block;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--color-gold);
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+
+.cosmetic-detail-title {
+  font-family: var(--font-heading);
+  font-size: var(--text-3xl);
+  font-weight: 600;
+  color: var(--color-charcoal);
+  letter-spacing: normal;
+  word-spacing: normal;
+  margin-bottom: var(--space-4);
+  /* Defensive: prevent mid-word breaks for Vietnamese text. */
+  word-break: normal;
+  overflow-wrap: normal;
+  word-wrap: normal;
+  hyphens: none;
+}
+
+.cosmetic-detail-price {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  color: var(--color-green-deep);
+  margin-bottom: var(--space-6);
+}
+
+.cosmetic-detail-description {
+  font-size: var(--text-base);
+  color: var(--color-charcoal-muted);
+  line-height: 1.7;
+  margin-bottom: var(--space-6);
+}
+
+.cosmetic-detail-volume {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+  font-size: var(--text-base);
+}
+
+.volume-label {
+  color: var(--color-charcoal-muted);
+}
+
+.volume-value {
+  color: var(--color-charcoal);
+  font-weight: 500;
+}
+
+.cosmetic-ingredients {
+  margin-bottom: var(--space-8);
+}
+
+.ingredients-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-charcoal);
+  margin-bottom: var(--space-3);
+}
+
+.ingredients-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ingredient-tag {
+  font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--color-green-pale);
+  color: var(--color-green-deep);
+  border-radius: var(--radius-sm);
+}
+
+.cosmetic-detail-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background-color: var(--color-ivory-dark);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+  line-height: 1.5;
+}
+
+.cosmetic-detail-note svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--color-info);
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .cosmetic-detail-content {
+    grid-template-columns: 1fr;
+    gap: var(--space-8);
+  }
+
+  .cosmetic-detail-image {
+    position: static;
+    max-width: 400px;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .cosmetic-detail-page {
+    padding: var(--space-6) var(--space-4);
+  }
+
+  .cosmetic-detail-image {
+    max-width: 100%;
+  }
+}

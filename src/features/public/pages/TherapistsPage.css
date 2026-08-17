@@ -1,0 +1,130 @@
+/* ============================================
+   Therapists Page Styles
+   ============================================ */
+
+.therapists-page {
+  padding: var(--space-12) var(--space-6);
+  min-height: calc(100vh - var(--header-height));
+  background-color: #FFFDF8;
+}
+
+/* Therapists Grid */
+.therapists-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-6);
+  margin-top: var(--space-8);
+}
+
+.therapist-card {
+  background-color: #FFFDF8;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  transition: box-shadow var(--transition-normal), transform var(--transition-normal);
+  display: flex;
+  flex-direction: column;
+}
+
+.therapist-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-4px);
+}
+
+.therapist-card-image {
+  width: 140px;
+  height: 140px;
+  margin: var(--space-8) auto var(--space-4);
+  border-radius: 50%;
+  overflow: hidden;
+  background-color: var(--color-green-pale);
+  border: 4px solid white;
+  box-shadow: var(--shadow-md);
+}
+
+.therapist-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.therapist-card-content {
+  padding: 0 var(--space-6) var(--space-6);
+  text-align: center;
+}
+
+.therapist-card-title {
+  font-family: var(--font-heading);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--color-charcoal);
+  margin-bottom: var(--space-2);
+  letter-spacing: normal;
+  word-spacing: normal;
+  /* Defensive: prevent mid-word breaks for Vietnamese text. */
+  word-break: normal;
+  overflow-wrap: normal;
+  word-wrap: normal;
+  hyphens: none;
+}
+
+.therapist-specialty {
+  font-size: var(--text-sm);
+  color: var(--color-green-medium);
+  margin-bottom: var(--space-1);
+}
+
+.therapist-experience {
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+  margin-bottom: var(--space-4);
+}
+
+.therapist-description {
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+  line-height: 1.6;
+  margin-bottom: var(--space-4);
+}
+
+.therapist-certifications {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.certification-tag {
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-3);
+  background-color: var(--color-green-pale);
+  color: var(--color-green-deep);
+  border-radius: var(--radius-sm);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .therapists-page {
+    padding: var(--space-8) var(--space-4);
+  }
+
+  .therapists-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+  }
+
+  .therapist-card-image {
+    width: 100px;
+    height: 100px;
+  }
+
+  .therapist-card-content {
+    padding: 0 var(--space-4) var(--space-4);
+  }
+}
+
+@media (max-width: 480px) {
+  .therapists-grid {
+    grid-template-columns: 1fr;
+  }
+}

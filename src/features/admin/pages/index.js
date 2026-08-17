@@ -1,0 +1,9 @@
+export { default as Dashboard } from './Dashboard';
+export { default as Users } from './Users';
+export { default as CatalogServices } from './CatalogServices';
+export { default as CatalogRooms } from './CatalogRooms';
+export { default as CatalogCosmetics } from './CatalogCosmetics';
+export { default as Inventory } from './Inventory';
+export { default as Invoices } from './Invoices';
+export { default as Reports } from './Reports';
+export { default as Profile } from './Profile';
