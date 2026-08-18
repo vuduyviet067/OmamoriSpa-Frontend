@@ -6,9 +6,9 @@
 // - REAL MODE (VITE_USE_MOCK_PUBLIC=false): Calls real backend API via Gateway
 //
 // Real backend endpoints (publicly accessible after security config update):
-// - GET /treatments -> list treatments
+// - GET /treatments/ -> list treatments
 // - GET /treatments/{id} -> treatment detail
-// - GET /cosmetics -> list cosmetics
+// - GET /cosmetics/ -> list cosmetics
 // - GET /cosmetics/{id} -> cosmetic detail
 //
 // SCOPE EXCLUSIONS (Phase 2):
@@ -46,16 +46,66 @@ const cloneList = (list) => (Array.isArray(list) ? list.map((item) => ({ ...item
 // =========================================================
 
 /**
- * Fetch wrapper with error handling.
+ * Fetch wrapper for TRUE ANONYMOUS public catalog requests.
  * Returns parsed JSON or throws on network/HTTP errors.
+ *
+ * ============================================================
+ * ANONYMITY CONTRACT (Do NOT change without security review):
+ * ============================================================
+ * This function MUST send anonymous requests for the public catalog.
+ * It must NOT depend on, read from, or attach anything related to
+ * the logged-in session (Authorization header, Bearer token, cookies,
+ * localStorage tokens, user identity, etc.).
+ *
+ * The browser fetch default for `credentials` is 'same-origin', which
+ * can still cause browsers to attach same-site cookies to the request.
+ * Public catalog endpoints should never rely on cookies either, so we
+ * explicitly set `credentials: 'omit'` to guarantee NO cookies/credentials
+ * are sent. This matches what curl does by default and is the difference
+ * between the working curl test (HTTP 200) and the failing browser call
+ * (HTTP 403).
+ *
+ * For the SAME reason we intentionally do NOT use the shared axios
+ * client (`@/services/api`) here, because it has a request interceptor
+ * that auto-injects `Authorization: Bearer <token>` from localStorage.
+ * Using axios here would defeat the anonymous contract.
+ *
+ * Headers policy:
+ * - GET requests: NO headers at all (no Content-Type, no Authorization,
+ *   no custom auth headers). This avoids unnecessary CORS preflights
+ *   and ensures the request is indistinguishable from a curl call.
+ * - POST/PUT/PATCH with body: only `Content-Type: application/json` is
+ *   set, and only when a body is actually present.
  */
-async function apiFetch(endpoint) {
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+async function apiFetch(endpoint, options = {}) {
+  const { method = 'GET', body } = options;
+
+  const headers = {};
+  // Only set Content-Type for requests that carry a body.
+  // GET requests must have zero headers to remain truly anonymous.
+  if (body && ['POST', 'PUT', 'PATCH'].includes(method)) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  const fetchOptions = {
+    method,
+    headers,
+    // Explicitly omit credentials (cookies, client certs, auth headers).
+    // This is the browser equivalent of curl's no-cookie default and
+    // is required so the browser does NOT send any session cookies that
+    // could trigger a 403 from the gateway/security filter.
+    credentials: 'omit',
+    // Disable caching for catalog reads (defensive; public catalog is
+    // safe to cache but this keeps parity with other service calls).
+    cache: 'no-store',
+  };
+
+  // Add body only if provided
+  if (body) {
+    fetchOptions.body = typeof body === 'string' ? body : JSON.stringify(body);
+  }
+
+  const response = await fetch(`${API_BASE}${endpoint}`, fetchOptions);
 
   if (!response.ok) {
     if (response.status === 404) {
@@ -211,7 +261,7 @@ export const getServices = async () => {
   }
 
   try {
-    const data = await apiFetch('/treatments');
+    const data = await apiFetch('/treatments/');
     if (!data || !Array.isArray(data)) {
       return [];
     }
@@ -261,7 +311,7 @@ export const getCosmetics = async () => {
   }
 
   try {
-    const data = await apiFetch('/cosmetics');
+    const data = await apiFetch('/cosmetics/');
     if (!data || !Array.isArray(data)) {
       return [];
     }
