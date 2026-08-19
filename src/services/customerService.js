@@ -9,6 +9,11 @@ const USE_MOCK_PROFILE =
   import.meta.env.VITE_USE_MOCK_PROFILE !== undefined
     ? import.meta.env.VITE_USE_MOCK_PROFILE === 'true'
     : USE_MOCK_DATA;
+
+const USE_MOCK_ROOMS =
+  import.meta.env.VITE_USE_MOCK_ROOMS !== undefined
+    ? import.meta.env.VITE_USE_MOCK_ROOMS === 'true'
+    : USE_MOCK_DATA;
 const mockDelay = (ms = 250) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 const cloneList = (list) => (Array.isArray(list) ? list.map((item) => ({ ...item })) : []);
@@ -196,12 +201,23 @@ export const getTherapists = async (params = {}) => {
  * Supports optional filters: serviceId, date, therapistId.
  */
 export const getRooms = async (params = {}) => {
-  if (USE_MOCK_DATA) {
+  if (USE_MOCK_ROOMS) {
     await mockDelay();
     return cloneList(mocks.rooms || []);
   }
-  const response = await apiClient.get('/rooms', { params });
-  return extractList(response.data);
+
+  const response = await apiClient.get('/rooms/', { params });
+  const rooms = response.data?.result ?? response.data;
+
+  if (!Array.isArray(rooms)) {
+    return [];
+  }
+
+  return rooms.filter(
+    (room) =>
+      room?.isActive !== false
+      && (room?.status == null || room.status === 'AVAILABLE')
+  );
 };
 
 /**
