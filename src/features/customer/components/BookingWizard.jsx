@@ -192,7 +192,7 @@ function RoomTimeStep({
       <div className="booking-section">
         <h3 className="booking-section-title">Chọn phòng</h3>
         {roomsLoading ? (
-          <LoadingState message="�ang tải phòng..." />
+          <LoadingState message="Đang tải phòng..." />
         ) : roomsError ? (
           <ErrorState message={roomsError} onRetry={onRetryRooms} />
         ) : !rooms || rooms.length === 0 ? (
