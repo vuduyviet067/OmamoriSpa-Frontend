@@ -4,6 +4,11 @@ import mocks from '@/mocks';
 
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true';
 // ↑ When false, 404 errors from lookup endpoints are surfaced as UI errors.
+
+const USE_MOCK_PROFILE =
+  import.meta.env.VITE_USE_MOCK_PROFILE !== undefined
+    ? import.meta.env.VITE_USE_MOCK_PROFILE === 'true'
+    : USE_MOCK_DATA;
 const mockDelay = (ms = 250) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 const cloneList = (list) => (Array.isArray(list) ? list.map((item) => ({ ...item })) : []);
@@ -249,24 +254,36 @@ export const getTransactionById = async (transactionId) => {
  * Get customer profile
  */
 export const getMyProfile = async () => {
-  if (USE_MOCK_DATA) {
+  if (USE_MOCK_PROFILE) {
     await mockDelay();
     return cloneItem(mocks.customer?.profile || {});
   }
-  const response = await apiClient.get('/customers/profile');
-  return response.data;
+
+  const response = await apiClient.get('/profiles/me');
+  const profile = response.data?.result ?? response.data;
+
+  return {
+    ...profile,
+    name: profile?.fullName ?? '',
+  };
 };
 
 /**
  * Update customer profile
  */
 export const updateMyProfile = async (data) => {
-  if (USE_MOCK_DATA) {
+  if (USE_MOCK_PROFILE) {
     await mockDelay();
     return cloneItem(data);
   }
-  const response = await apiClient.put('/customers/profile', data);
-  return response.data;
+
+  const response = await apiClient.put('/profiles/me', data);
+  const profile = response.data?.result ?? response.data;
+
+  return {
+    ...profile,
+    name: profile?.fullName ?? '',
+  };
 };
 
 /**

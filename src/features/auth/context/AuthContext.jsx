@@ -92,7 +92,11 @@ export function AuthProvider({ children }) {
 
       setUser(userData);
       setAccessToken(response.accessToken);
-      return response;
+
+      return {
+        ...response,
+        user: userData,
+      };
     } finally {
       setLoading(false);
     }
