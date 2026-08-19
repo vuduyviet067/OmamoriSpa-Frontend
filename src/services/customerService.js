@@ -14,9 +14,14 @@ const USE_MOCK_ROOMS =
   import.meta.env.VITE_USE_MOCK_ROOMS !== undefined
     ? import.meta.env.VITE_USE_MOCK_ROOMS === 'true'
     : USE_MOCK_DATA;
+
+const USE_MOCK_THERAPISTS =
+  import.meta.env.VITE_USE_MOCK_THERAPISTS !== undefined
+    ? import.meta.env.VITE_USE_MOCK_THERAPISTS === 'true'
+    : USE_MOCK_DATA;
+
 const mockDelay = (ms = 250) =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-const cloneList = (list) => (Array.isArray(list) ? list.map((item) => ({ ...item })) : []);
+  new Promise((resolve) => setTimeout(resolve, ms));const cloneList = (list) => (Array.isArray(list) ? list.map((item) => ({ ...item })) : []);
 const cloneItem = (item) => (item && typeof item === 'object' ? { ...item } : null);
 
 // Appointment Status enum
@@ -178,6 +183,7 @@ export const getServices = async () => {
     await mockDelay();
     return cloneList(mocks.services || []);
   }
+
   const response = await apiClient.get('/services');
   return extractList(response.data);
 };
@@ -187,14 +193,29 @@ export const getServices = async () => {
  * Supports optional filters: serviceId, date.
  */
 export const getTherapists = async (params = {}) => {
-  if (USE_MOCK_DATA) {
+  if (USE_MOCK_THERAPISTS) {
     await mockDelay();
-    let list = cloneList(mocks.therapists || []);
-    return list;
+    return cloneList(mocks.therapists || []);
   }
-  const response = await apiClient.get('/therapists', { params });
-  return extractList(response.data);
+
+  const response = await apiClient.get('/profiles/therapists', { params });
+  const therapists = response.data?.result ?? response.data;
+
+  if (!Array.isArray(therapists)) {
+    return [];
+  }
+
+  return therapists
+    .filter((therapist) => therapist?.active !== false)
+    .map((therapist) => ({
+      ...therapist,
+      id: therapist.id,
+      name: therapist.fullName ?? 'Kỹ thuật viên',
+      specialty: therapist.specialization ?? '',
+      image: therapist.avatarUrl ?? '',
+    }));
 };
+
 
 /**
  * Get list of rooms available for booking.
