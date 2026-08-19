@@ -24,6 +24,10 @@ const mockDelay = (ms = 250) =>
   new Promise((resolve) => setTimeout(resolve, ms));const cloneList = (list) => (Array.isArray(list) ? list.map((item) => ({ ...item })) : []);
 const cloneItem = (item) => (item && typeof item === 'object' ? { ...item } : null);
 
+const USE_MOCK_SERVICES =
+  import.meta.env.VITE_USE_MOCK_SERVICES !== undefined
+    ? import.meta.env.VITE_USE_MOCK_SERVICES === 'true'
+    : USE_MOCK_DATA;
 // Appointment Status enum
 export const APPOINTMENT_STATUS = {
   PENDING: 'PENDING',
@@ -179,13 +183,29 @@ export const updateAppointment = async (appointmentId, payload) => {
  * Get list of available services for booking.
  */
 export const getServices = async () => {
-  if (USE_MOCK_DATA) {
+  if (USE_MOCK_SERVICES) {
     await mockDelay();
     return cloneList(mocks.services || []);
   }
 
-  const response = await apiClient.get('/services');
-  return extractList(response.data);
+  const response = await apiClient.get('/treatments/');
+  const services = response.data?.result ?? response.data;
+
+  if (!Array.isArray(services)) {
+    return [];
+  }
+
+  return services
+    .filter((service) => service?.isActive !== false)
+    .map((service) => ({
+      ...service,
+      id: service.id,
+      name: service.name ?? 'Dịch vụ',
+      category: service.category ?? '',
+      price: service.price ?? 0,
+      durationMinutes: service.durationMinutes ?? null,
+      description: service.description ?? '',
+    }));
 };
 
 /**
