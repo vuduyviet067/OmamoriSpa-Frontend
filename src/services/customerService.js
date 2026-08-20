@@ -2,7 +2,8 @@
 import apiClient from './api';
 import mocks from '@/mocks';
 
-const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true';
+const USE_MOCK_DATA =
+  import.meta.env.VITE_USE_MOCK_DATA === 'true';
 // ↑ When false, 404 errors from lookup endpoints are surfaced as UI errors.
 
 const USE_MOCK_PROFILE =
@@ -30,6 +31,16 @@ const USE_MOCK_TRANSACTIONS =
     ? import.meta.env.VITE_USE_MOCK_TRANSACTIONS === 'true'
     : USE_MOCK_DATA;
 
+const USE_MOCK_SERVICES =
+  import.meta.env.VITE_USE_MOCK_SERVICES !== undefined
+    ? import.meta.env.VITE_USE_MOCK_SERVICES === 'true'
+    : USE_MOCK_DATA;
+
+
+// =========================================================
+// TRANSACTION NORMALIZER
+// =========================================================
+
 const normalizeTransaction = (invoice = {}) => {
   const normalizedStatus =
     invoice.status === 'PENDING_PAYMENT'
@@ -47,13 +58,32 @@ const normalizeTransaction = (invoice = {}) => {
 
   return {
     ...invoice,
+
     status: normalizedStatus,
-    amount: invoice.amount ?? invoice.totalAmount ?? 0,
-    total: invoice.total ?? invoice.totalAmount ?? 0,
-    date: invoice.date ?? invoice.paidAt ?? invoice.createdAt,
+
+    amount:
+      invoice.amount ??
+      invoice.totalAmount ??
+      0,
+
+    total:
+      invoice.total ??
+      invoice.totalAmount ??
+      0,
+
+    date:
+      invoice.date ??
+      invoice.paidAt ??
+      invoice.createdAt,
+
     items,
   };
 };
+
+
+// =========================================================
+// COMMON HELPERS
+// =========================================================
 
 const mockDelay = (ms = 250) =>
   new Promise((resolve) => setTimeout(resolve, ms));
@@ -68,10 +98,10 @@ const cloneItem = (item) =>
     ? { ...item }
     : null;
 
-const USE_MOCK_SERVICES =
-  import.meta.env.VITE_USE_MOCK_SERVICES !== undefined
-    ? import.meta.env.VITE_USE_MOCK_SERVICES === 'true'
-    : USE_MOCK_DATA;
+
+// =========================================================
+// APPOINTMENT CONSTANTS
+// =========================================================
 
 // Appointment Status enum
 export const APPOINTMENT_STATUS = {
@@ -103,6 +133,11 @@ export const APPOINTMENT_STATUS_VARIANTS = {
   [APPOINTMENT_STATUS.CANCELLED]: 'error',
 };
 
+
+// =========================================================
+// TIME SLOTS
+// =========================================================
+
 // Default business time slots (HH:mm)
 export const DEFAULT_TIME_SLOTS = [
   '09:00',
@@ -125,11 +160,36 @@ export const getAvailableTimeSlots = async () => {
   return DEFAULT_TIME_SLOTS;
 };
 
+
+// =========================================================
+// RESPONSE HELPERS
+// =========================================================
+
 const extractList = (payload) => {
-  if (Array.isArray(payload)) return payload;
-  if (payload && Array.isArray(payload.data)) return payload.data;
-  if (payload && Array.isArray(payload.items)) return payload.items;
-  if (payload && Array.isArray(payload.results)) return payload.results;
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (
+    payload &&
+    Array.isArray(payload.data)
+  ) {
+    return payload.data;
+  }
+
+  if (
+    payload &&
+    Array.isArray(payload.items)
+  ) {
+    return payload.items;
+  }
+
+  if (
+    payload &&
+    Array.isArray(payload.results)
+  ) {
+    return payload.results;
+  }
 
   return [];
 };
@@ -153,12 +213,22 @@ const extractObject = (payload) => {
   return null;
 };
 
+
+// =========================================================
+// CONFLICT HELPER
+// =========================================================
+
 export const isConflictError = (err) => {
-  if (!err) return false;
+  if (!err) {
+    return false;
+  }
 
   const status = err.response?.status;
 
-  if (status === 409 || status === 422) {
+  if (
+    status === 409 ||
+    status === 422
+  ) {
     return true;
   }
 
@@ -183,8 +253,16 @@ export const isConflictError = (err) => {
   );
 };
 
+
+// =========================================================
+// APPOINTMENT NORMALIZER
+// =========================================================
+
 const normalizeAppointment = (appointment) => {
-  if (!appointment || typeof appointment !== 'object') {
+  if (
+    !appointment ||
+    typeof appointment !== 'object'
+  ) {
     return null;
   }
 
@@ -204,14 +282,22 @@ const normalizeAppointment = (appointment) => {
   const startTime =
     appointment.startTime ??
     appointment.time ??
-    (timePart ? timePart.substring(0, 5) : '');
+    (
+      timePart
+        ? timePart.substring(0, 5)
+        : ''
+    );
 
   return {
     ...appointment,
 
     date,
+
     startTime,
-    time: appointment.time ?? startTime,
+
+    time:
+      appointment.time ??
+      startTime,
 
     price:
       appointment.price ??
@@ -232,35 +318,57 @@ const normalizeAppointment = (appointment) => {
     service:
       appointment.service ?? {
         id: appointment.serviceId,
-        name: appointment.serviceName ?? 'Dịch vụ',
-        price: appointment.servicePrice ?? 0,
+
+        name:
+          appointment.serviceName ??
+          'Dịch vụ',
+
+        price:
+          appointment.servicePrice ??
+          0,
       },
 
     room:
       appointment.room ?? {
         id: appointment.roomId,
-        name: appointment.roomName ?? 'Phòng',
-        price: appointment.roomPrice ?? 0,
+
+        name:
+          appointment.roomName ??
+          'Phòng',
+
+        price:
+          appointment.roomPrice ??
+          0,
       },
 
     therapist:
       appointment.therapist ??
       (
         appointment.therapistId
-          ? { id: appointment.therapistId }
+          ? {
+              id: appointment.therapistId,
+            }
           : null
       ),
   };
 };
 
-const toBackendAppointmentPayload = (payload = {}) => {
+
+// =========================================================
+// APPOINTMENT REQUEST MAPPER
+// =========================================================
+
+const toBackendAppointmentPayload = (
+  payload = {}
+) => {
   const rawTime =
     payload.startTime ||
     payload.time ||
     '';
 
   let appointmentTime =
-    payload.appointmentTime ?? null;
+    payload.appointmentTime ??
+    null;
 
   if (
     !appointmentTime &&
@@ -277,14 +385,33 @@ const toBackendAppointmentPayload = (payload = {}) => {
   }
 
   return {
-    serviceId: payload.serviceId,
-    roomId: payload.roomId,
-    therapistId: payload.therapistId || null,
+    serviceId:
+      payload.serviceId,
+
+    roomId:
+      payload.roomId,
+
+    therapistId:
+      payload.therapistId ||
+      null,
+
     appointmentTime,
-    reason: payload.reason ?? '',
-    note: payload.note ?? payload.notes ?? '',
+
+    reason:
+      payload.reason ??
+      '',
+
+    note:
+      payload.note ??
+      payload.notes ??
+      '',
   };
 };
+
+
+// =========================================================
+// CUSTOMER APPOINTMENTS
+// =========================================================
 
 /**
  * Get all appointments for the logged-in customer
@@ -294,15 +421,19 @@ export const getMyAppointments = async () => {
     await mockDelay();
 
     return cloneList(
-      mocks.customer?.appointments || []
+      mocks.customer?.appointments ||
+      []
     );
   }
 
   const response =
-    await apiClient.get('/appointments/me');
+    await apiClient.get(
+      '/appointments/me'
+    );
 
   const appointments =
-    response.data?.result ?? response.data;
+    response.data?.result ??
+    response.data;
 
   if (!Array.isArray(appointments)) {
     return [];
@@ -313,6 +444,10 @@ export const getMyAppointments = async () => {
     .filter(Boolean);
 };
 
+
+/**
+ * Get one customer appointment
+ */
 export const getAppointmentById = async (
   appointmentId
 ) => {
@@ -320,7 +455,10 @@ export const getAppointmentById = async (
     await mockDelay();
 
     const apt =
-      (mocks.customer?.appointments || []).find(
+      (
+        mocks.customer?.appointments ||
+        []
+      ).find(
         (a) =>
           String(a.id) ===
           String(appointmentId)
@@ -328,10 +466,13 @@ export const getAppointmentById = async (
 
     if (!apt) {
       const err =
-        new Error('Không tìm thấy lịch hẹn.');
+        new Error(
+          'Không tìm thấy lịch hẹn.'
+        );
 
       err.response = {
         status: 404,
+
         data: {
           message: err.message,
         },
@@ -343,15 +484,21 @@ export const getAppointmentById = async (
     return cloneItem(apt);
   }
 
-  const response = await apiClient.get(
-    `/appointments/me/${appointmentId}`
-  );
+  const response =
+    await apiClient.get(
+      `/appointments/me/${appointmentId}`
+    );
 
   return normalizeAppointment(
-    response.data?.result ?? response.data
+    response.data?.result ??
+    response.data
   );
 };
 
+
+/**
+ * Get upcoming appointments
+ */
 export const getUpcomingAppointments = async () => {
   if (USE_MOCK_APPOINTMENTS) {
     await mockDelay();
@@ -364,8 +511,12 @@ export const getUpcomingAppointments = async () => {
     ];
 
     return cloneList(
-      (mocks.customer?.appointments || []).filter(
-        (a) => UPCOMING.includes(a.status)
+      (
+        mocks.customer?.appointments ||
+        []
+      ).filter(
+        (a) =>
+          UPCOMING.includes(a.status)
       )
     );
   }
@@ -381,10 +532,16 @@ export const getUpcomingAppointments = async () => {
 
   return appointments.filter(
     (appointment) =>
-      UPCOMING.includes(appointment.status)
+      UPCOMING.includes(
+        appointment.status
+      )
   );
 };
 
+
+/**
+ * Create appointment
+ */
 export const createAppointment = async (
   payload
 ) => {
@@ -393,70 +550,129 @@ export const createAppointment = async (
 
     const newApt = {
       id: Date.now(),
+
       ...payload,
+
       status: 'PENDING',
 
       service:
-        (mocks.services || []).find(
+        (
+          mocks.services ||
+          []
+        ).find(
           (s) =>
             String(s.id) ===
             String(payload.serviceId)
         ),
 
       therapist:
-        (mocks.therapists || []).find(
+        (
+          mocks.therapists ||
+          []
+        ).find(
           (t) =>
             String(t.id) ===
             String(payload.therapistId)
         ),
 
       room:
-        (mocks.rooms || []).find(
+        (
+          mocks.rooms ||
+          []
+        ).find(
           (r) =>
             String(r.id) ===
             String(payload.roomId)
         ),
 
-      createdAt: new Date().toISOString(),
+      createdAt:
+        new Date().toISOString(),
     };
 
     return newApt;
   }
 
   const requestBody =
-    toBackendAppointmentPayload(payload);
+    toBackendAppointmentPayload(
+      payload
+    );
 
-  const response = await apiClient.post(
-    '/appointments/me',
-    requestBody
-  );
+  const response =
+    await apiClient.post(
+      '/appointments/me',
+      requestBody
+    );
 
   return normalizeAppointment(
-    response.data?.result ?? response.data
+    response.data?.result ??
+    response.data
   );
 };
 
+
+/**
+ * Update appointment
+ */
 export const updateAppointment = async (
   appointmentId,
   payload
 ) => {
   if (USE_MOCK_APPOINTMENTS) {
     await mockDelay();
+
     return cloneItem(payload);
   }
 
   const requestBody =
-    toBackendAppointmentPayload(payload);
+    toBackendAppointmentPayload(
+      payload
+    );
 
-  const response = await apiClient.put(
-    `/appointments/me/${appointmentId}`,
-    requestBody
-  );
+  const response =
+    await apiClient.put(
+      `/appointments/me/${appointmentId}`,
+      requestBody
+    );
 
   return normalizeAppointment(
-    response.data?.result ?? response.data
+    response.data?.result ??
+    response.data
   );
 };
+
+
+/**
+ * Cancel appointment
+ */
+export const cancelAppointment = async (
+  appointmentId,
+  reason = ''
+) => {
+  if (USE_MOCK_APPOINTMENTS) {
+    await mockDelay();
+
+    return {
+      id: appointmentId,
+      status: 'CANCELLED',
+      reason,
+    };
+  }
+
+  const response =
+    await apiClient.patch(
+      `/appointments/me/${appointmentId}/cancel`
+    );
+
+  return normalizeAppointment(
+    response.data?.result ??
+    response.data
+  );
+};
+
+
+// =========================================================
+// BOOKING SERVICES
+// =========================================================
 
 /**
  * Get list of available services for booking.
@@ -464,14 +680,21 @@ export const updateAppointment = async (
 export const getServices = async () => {
   if (USE_MOCK_SERVICES) {
     await mockDelay();
-    return cloneList(mocks.services || []);
+
+    return cloneList(
+      mocks.services ||
+      []
+    );
   }
 
   const response =
-    await apiClient.get('/treatments/');
+    await apiClient.get(
+      '/treatments/'
+    );
 
   const services =
-    response.data?.result ?? response.data;
+    response.data?.result ??
+    response.data;
 
   if (!Array.isArray(services)) {
     return [];
@@ -482,21 +705,40 @@ export const getServices = async () => {
       (service) =>
         service?.isActive !== false
     )
-    .map((service) => ({
-      ...service,
-      id: service.id,
-      name:
-        service.name ?? 'Dịch vụ',
-      category:
-        service.category ?? '',
-      price:
-        service.price ?? 0,
-      durationMinutes:
-        service.durationMinutes ?? null,
-      description:
-        service.description ?? '',
-    }));
+    .map(
+      (service) => ({
+        ...service,
+
+        id:
+          service.id,
+
+        name:
+          service.name ??
+          'Dịch vụ',
+
+        category:
+          service.category ??
+          '',
+
+        price:
+          service.price ??
+          0,
+
+        durationMinutes:
+          service.durationMinutes ??
+          null,
+
+        description:
+          service.description ??
+          '',
+      })
+    );
 };
+
+
+// =========================================================
+// THERAPISTS
+// =========================================================
 
 /**
  * Get list of therapists available for booking.
@@ -506,16 +748,24 @@ export const getTherapists = async (
 ) => {
   if (USE_MOCK_THERAPISTS) {
     await mockDelay();
-    return cloneList(mocks.therapists || []);
+
+    return cloneList(
+      mocks.therapists ||
+      []
+    );
   }
 
-  const response = await apiClient.get(
-    '/profiles/therapists',
-    { params }
-  );
+  const response =
+    await apiClient.get(
+      '/profiles/therapists',
+      {
+        params,
+      }
+    );
 
   const therapists =
-    response.data?.result ?? response.data;
+    response.data?.result ??
+    response.data;
 
   if (!Array.isArray(therapists)) {
     return [];
@@ -526,18 +776,32 @@ export const getTherapists = async (
       (therapist) =>
         therapist?.active !== false
     )
-    .map((therapist) => ({
-      ...therapist,
-      id: therapist.id,
-      name:
-        therapist.fullName ??
-        'Kỹ thuật viên',
-      specialty:
-        therapist.specialization ?? '',
-      image:
-        therapist.avatarUrl ?? '',
-    }));
+    .map(
+      (therapist) => ({
+        ...therapist,
+
+        id:
+          therapist.id,
+
+        name:
+          therapist.fullName ??
+          'Kỹ thuật viên',
+
+        specialty:
+          therapist.specialization ??
+          '',
+
+        image:
+          therapist.avatarUrl ??
+          '',
+      })
+    );
 };
+
+
+// =========================================================
+// ROOMS
+// =========================================================
 
 /**
  * Get list of rooms available for booking.
@@ -547,16 +811,24 @@ export const getRooms = async (
 ) => {
   if (USE_MOCK_ROOMS) {
     await mockDelay();
-    return cloneList(mocks.rooms || []);
+
+    return cloneList(
+      mocks.rooms ||
+      []
+    );
   }
 
-  const response = await apiClient.get(
-    '/rooms/',
-    { params }
-  );
+  const response =
+    await apiClient.get(
+      '/rooms/',
+      {
+        params,
+      }
+    );
 
   const rooms =
-    response.data?.result ?? response.data;
+    response.data?.result ??
+    response.data;
 
   if (!Array.isArray(rooms)) {
     return [];
@@ -572,6 +844,11 @@ export const getRooms = async (
   );
 };
 
+
+// =========================================================
+// CUSTOMER TRANSACTIONS
+// =========================================================
+
 /**
  * Get a single transaction by ID
  */
@@ -582,7 +859,10 @@ export const getTransactionById = async (
     await mockDelay();
 
     const txn =
-      (mocks.customer?.transactions || []).find(
+      (
+        mocks.customer?.transactions ||
+        []
+      ).find(
         (t) =>
           String(t.id) ===
           String(transactionId)
@@ -596,8 +876,10 @@ export const getTransactionById = async (
 
       err.response = {
         status: 404,
+
         data: {
-          message: err.message,
+          message:
+            err.message,
         },
       };
 
@@ -607,15 +889,74 @@ export const getTransactionById = async (
     return cloneItem(txn);
   }
 
-  const response = await apiClient.get(
-    `/payments/me/${transactionId}`
-  );
+  const response =
+    await apiClient.get(
+      `/payments/me/${transactionId}`
+    );
 
   const invoice =
-    response.data?.result ?? response.data;
+    response.data?.result ??
+    response.data;
 
-  return normalizeTransaction(invoice);
+  return normalizeTransaction(
+    invoice
+  );
 };
+
+
+/**
+ * Create VNPay payment URL
+ * for invoice owned by logged-in customer.
+ */
+export const createVnPayPayment = async (
+  transactionId
+) => {
+  const response =
+    await apiClient.post(
+      `/payments/me/${transactionId}/vnpay/create`
+    );
+
+  return (
+    response.data?.result ??
+    response.data
+  );
+};
+
+
+/**
+ * Get transaction history for logged-in customer
+ */
+export const getMyTransactions = async () => {
+  if (USE_MOCK_TRANSACTIONS) {
+    await mockDelay();
+
+    return cloneList(
+      mocks.customer?.transactions ||
+      []
+    );
+  }
+
+  const response =
+    await apiClient.get(
+      '/payments/me'
+    );
+
+  const invoices =
+    response.data?.result ??
+    response.data ??
+    [];
+
+  return Array.isArray(invoices)
+    ? invoices.map(
+        normalizeTransaction
+      )
+    : [];
+};
+
+
+// =========================================================
+// CUSTOMER PROFILE
+// =========================================================
 
 /**
  * Get customer profile
@@ -625,21 +966,29 @@ export const getMyProfile = async () => {
     await mockDelay();
 
     return cloneItem(
-      mocks.customer?.profile || {}
+      mocks.customer?.profile ||
+      {}
     );
   }
 
   const response =
-    await apiClient.get('/profiles/me');
+    await apiClient.get(
+      '/profiles/me'
+    );
 
   const profile =
-    response.data?.result ?? response.data;
+    response.data?.result ??
+    response.data;
 
   return {
     ...profile,
-    name: profile?.fullName ?? '',
+
+    name:
+      profile?.fullName ??
+      '',
   };
 };
+
 
 /**
  * Update customer profile
@@ -649,6 +998,7 @@ export const updateMyProfile = async (
 ) => {
   if (USE_MOCK_PROFILE) {
     await mockDelay();
+
     return cloneItem(data);
   }
 
@@ -659,90 +1009,65 @@ export const updateMyProfile = async (
     );
 
   const profile =
-    response.data?.result ?? response.data;
+    response.data?.result ??
+    response.data;
 
   return {
     ...profile,
-    name: profile?.fullName ?? '',
+
+    name:
+      profile?.fullName ??
+      '',
   };
 };
 
-/**
- * Get transaction history for logged-in customer
- */
-export const getMyTransactions = async () => {
-  if (USE_MOCK_TRANSACTIONS) {
-    await mockDelay();
 
-    return cloneList(
-      mocks.customer?.transactions || []
-    );
-  }
+// =========================================================
+// HELPERS EXPOSED FOR COMPONENTS
+// =========================================================
 
-  const response =
-    await apiClient.get('/payments/me');
-
-  const invoices =
-    response.data?.result ??
-    response.data ??
-    [];
-
-  return Array.isArray(invoices)
-    ? invoices.map(normalizeTransaction)
-    : [];
-};
-
-export const cancelAppointment = async (
-  appointmentId,
-  reason = ''
-) => {
-  if (USE_MOCK_APPOINTMENTS) {
-    await mockDelay();
-
-    return {
-      id: appointmentId,
-      status: 'CANCELLED',
-      reason,
-    };
-  }
-
-  const response = await apiClient.patch(
-    `/appointments/me/${appointmentId}/cancel`
-  );
-
-  return normalizeAppointment(
-    response.data?.result ?? response.data
-  );
-};
-
-/**
- * Helpers exposed for components
- */
 export const helpers = {
   extractList,
   extractObject,
   isConflictError,
 };
 
+
+// =========================================================
+// DEFAULT EXPORT
+// =========================================================
+
 export default {
+  // Appointments
   getMyAppointments,
   getAppointmentById,
   getUpcomingAppointments,
   createAppointment,
   updateAppointment,
+  cancelAppointment,
+
+  // Booking
   getServices,
   getTherapists,
   getRooms,
   getAvailableTimeSlots,
+
+  // Transactions
   getMyTransactions,
   getTransactionById,
+  createVnPayPayment,
+
+  // Profile
   getMyProfile,
   updateMyProfile,
-  cancelAppointment,
+
+  // Helpers
   isConflictError,
+
   APPOINTMENT_STATUS,
   APPOINTMENT_STATUS_LABELS,
   APPOINTMENT_STATUS_VARIANTS,
   DEFAULT_TIME_SLOTS,
+
   helpers,
 };
