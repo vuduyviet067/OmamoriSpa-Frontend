@@ -116,7 +116,7 @@ function TherapistDashboard() {
       .filter((apt) => apt.status !== APPOINTMENT_STATUS.COMPLETED)
       .map((apt) => ({ apt, start: parseStart(apt) }))
       .filter(({ apt, start }) => {
-        if (apt.status === APPOINTMENT_STATUS.IN_TREATMENT) return true;
+        if (apt.status === APPOINTMENT_STATUS.IN_PROGRESS) return true;
         return start && start.getTime() >= now;
       })
       .sort((a, b) => {
@@ -247,7 +247,7 @@ function TherapistDashboard() {
               const statusVariant = APPOINTMENT_STATUS_VARIANTS[apt.status] || 'neutral';
               const statusLabel = APPOINTMENT_STATUS_LABELS[apt.status] || apt.status;
               const isPast = apt.status === APPOINTMENT_STATUS.COMPLETED;
-              const isLive = apt.status === APPOINTMENT_STATUS.IN_TREATMENT;
+              const isLive = apt.status === APPOINTMENT_STATUS.IN_PROGRESS;
               return (
                 <Link
                   key={apt.id}
