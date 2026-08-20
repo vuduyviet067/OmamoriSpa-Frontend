@@ -20,6 +20,11 @@ const USE_MOCK_THERAPISTS =
     ? import.meta.env.VITE_USE_MOCK_THERAPISTS === 'true'
     : USE_MOCK_DATA;
 
+const USE_MOCK_APPOINTMENTS =
+  import.meta.env.VITE_USE_MOCK_APPOINTMENTS !== undefined
+    ? import.meta.env.VITE_USE_MOCK_APPOINTMENTS === 'true'
+    : USE_MOCK_DATA;
+
 const mockDelay = (ms = 250) =>
   new Promise((resolve) => setTimeout(resolve, ms));const cloneList = (list) => (Array.isArray(list) ? list.map((item) => ({ ...item })) : []);
 const cloneItem = (item) => (item && typeof item === 'object' ? { ...item } : null);
@@ -64,6 +69,14 @@ export const DEFAULT_TIME_SLOTS = [
   '14:00', '15:00', '16:00', '17:00', '18:00', '19:00',
 ];
 
+export const getAvailableTimeSlots = async () => {
+  if (USE_MOCK_APPOINTMENTS) {
+    await mockDelay();
+  }
+
+  return DEFAULT_TIME_SLOTS;
+};
+
 const extractList = (payload) => {
   if (Array.isArray(payload)) return payload;
   if (payload && Array.isArray(payload.data)) return payload.data;
@@ -84,6 +97,86 @@ const extractObject = (payload) => {
  * Detect a "conflict" error from the backend (409 / specific message).
  * Used to surface the inline conflict message without resetting the form.
  */
+const toBackendAppointmentPayload = (payload = {}) => {
+  const rawTime = payload.startTime || payload.time || '';
+
+  let appointmentTime = payload.appointmentTime ?? null;
+
+  if (!appointmentTime && payload.date && rawTime) {
+    const normalizedTime =
+      rawTime.length === 5 ? `${rawTime}:00` : rawTime;
+
+    appointmentTime = `${payload.date}T${normalizedTime}`;
+  }
+
+  return {
+    serviceId: payload.serviceId,
+    roomId: payload.roomId,
+    therapistId: payload.therapistId || null,
+    appointmentTime,
+    reason: payload.reason ?? '',
+    note: payload.note ?? payload.notes ?? '',
+  };
+};
+
+const normalizeAppointment = (appointment) => {
+  if (!appointment || typeof appointment !== 'object') {
+    return null;
+  }
+
+  const appointmentTime = appointment.appointmentTime ?? '';
+  const [date = '', rawTime = ''] = appointmentTime.split('T');
+  const startTime = rawTime.slice(0, 5);
+
+  return {
+    ...appointment,
+
+    // Adapter Backend -> shape mà Customer UI hiện tại đang dùng.
+    date: appointment.date ?? date,
+    startTime: appointment.startTime ?? startTime,
+    time: appointment.time ?? startTime,
+
+    price:
+      appointment.price
+      ?? appointment.totalAmount
+      ?? appointment.servicePrice
+      ?? 0,
+
+    notes: appointment.notes ?? appointment.note ?? '',
+
+    service:
+      appointment.service
+      ?? (
+        appointment.serviceId
+          ? {
+              id: appointment.serviceId,
+              name: appointment.serviceName ?? 'Dịch vụ',
+              price: appointment.servicePrice ?? 0,
+            }
+          : null
+      ),
+
+    room:
+      appointment.room
+      ?? (
+        appointment.roomId
+          ? {
+              id: appointment.roomId,
+              name: appointment.roomName ?? 'Phòng',
+              price: appointment.roomPrice ?? 0,
+            }
+          : null
+      ),
+
+    therapist:
+      appointment.therapist
+      ?? (
+        appointment.therapistId
+          ? { id: appointment.therapistId }
+          : null
+      ),
+  };
+};
 export const isConflictError = (err) => {
   if (!err) return false;
   const status = err.response?.status;
@@ -98,85 +191,135 @@ export const isConflictError = (err) => {
  * Get all appointments for the logged-in customer
  */
 export const getMyAppointments = async () => {
-  if (USE_MOCK_DATA) {
+  if (USE_MOCK_APPOINTMENTS) {
     await mockDelay();
     return cloneList(mocks.customer?.appointments || []);
   }
-  const response = await apiClient.get('/appointments/my');
-  return response.data;
-};
 
-/**
- * Get a single appointment by ID
- */
+  const response = await apiClient.get('/appointments/me');
+  const appointments = response.data?.result ?? response.data;
+
+  if (!Array.isArray(appointments)) {
+    return [];
+  }
+
+  return appointments
+    .map(normalizeAppointment)
+    .filter(Boolean);
+};
 export const getAppointmentById = async (appointmentId) => {
-  if (USE_MOCK_DATA) {
+  if (USE_MOCK_APPOINTMENTS) {
     await mockDelay();
+
     const apt = (mocks.customer?.appointments || []).find(
       (a) => String(a.id) === String(appointmentId)
     );
+
     if (!apt) {
       const err = new Error('Không tìm thấy lịch hẹn.');
-      err.response = { status: 404, data: { message: err.message } };
+      err.response = {
+        status: 404,
+        data: { message: err.message },
+      };
       throw err;
     }
+
     return cloneItem(apt);
   }
-  const response = await apiClient.get(`/appointments/${appointmentId}`);
-  return response.data;
+
+  const response = await apiClient.get(
+    `/appointments/me/${appointmentId}`
+  );
+
+  return normalizeAppointment(
+    response.data?.result ?? response.data
+  );
 };
 
-/**
- * Get upcoming appointments for the logged-in customer
- */
 export const getUpcomingAppointments = async () => {
-  if (USE_MOCK_DATA) {
+  if (USE_MOCK_APPOINTMENTS) {
     await mockDelay();
-    const UPCOMING = ['PENDING', 'CONFIRMED', 'ACCEPTED', 'IN_TREATMENT'];
+
+    const UPCOMING = [
+      'PENDING',
+      'CONFIRMED',
+      'ACCEPTED',
+      'IN_TREATMENT',
+    ];
+
     return cloneList(
-      (mocks.customer?.appointments || []).filter((a) => UPCOMING.includes(a.status))
+      (mocks.customer?.appointments || []).filter(
+        (a) => UPCOMING.includes(a.status)
+      )
     );
   }
-  const response = await apiClient.get('/appointments/my', {
-    params: {
-      status: `${APPOINTMENT_STATUS.PENDING},${APPOINTMENT_STATUS.CONFIRMED},${APPOINTMENT_STATUS.ACCEPTED},${APPOINTMENT_STATUS.IN_TREATMENT}`,
-    },
-  });
-  return response.data;
-};
 
-/**
- * Create a new appointment (UC_05 - Customer Booking).
- * Throws conflict error (409/422) when therapist or room is busy.
- */
+  const appointments = await getMyAppointments();
+
+  const UPCOMING = [
+    'PENDING',
+    'CONFIRMED',
+    'IN_PROGRESS',
+  ];
+
+  return appointments.filter(
+    (appointment) => UPCOMING.includes(appointment.status)
+  );
+};
 export const createAppointment = async (payload) => {
-  if (USE_MOCK_DATA) {
+  if (USE_MOCK_APPOINTMENTS) {
     await mockDelay();
+
     const newApt = {
       id: Date.now(),
       ...payload,
       status: 'PENDING',
-      service: (mocks.services || []).find((s) => String(s.id) === String(payload.serviceId)),
-      therapist: (mocks.therapists || []).find((t) => String(t.id) === String(payload.therapistId)),
-      room: (mocks.rooms || []).find((r) => String(r.id) === String(payload.roomId)),
+      service: (mocks.services || []).find(
+        (s) => String(s.id) === String(payload.serviceId)
+      ),
+      therapist: (mocks.therapists || []).find(
+        (t) => String(t.id) === String(payload.therapistId)
+      ),
+      room: (mocks.rooms || []).find(
+        (r) => String(r.id) === String(payload.roomId)
+      ),
       createdAt: new Date().toISOString(),
     };
+
     return newApt;
   }
-  const response = await apiClient.post('/appointments', payload);
-  return response.data;
+
+  const requestBody = toBackendAppointmentPayload(payload);
+
+  const response = await apiClient.post(
+    '/appointments/me',
+    requestBody
+  );
+
+  return normalizeAppointment(
+    response.data?.result ?? response.data
+  );
 };
 
-/**
- * Update an existing PENDING appointment.
- */
-export const updateAppointment = async (appointmentId, payload) => {
-  if (USE_MOCK_DATA) {
+export const updateAppointment = async (
+  appointmentId,
+  payload
+) => {
+  if (USE_MOCK_APPOINTMENTS) {
     await mockDelay();
     return cloneItem(payload);
   }
-  const response = await apiClient.put(`/appointments/${appointmentId}`, payload);
-  return response.data;
+
+  const requestBody = toBackendAppointmentPayload(payload);
+
+  const response = await apiClient.put(
+    `/appointments/me/${appointmentId}`,
+    requestBody
+  );
+
+  return normalizeAppointment(
+    response.data?.result ?? response.data
+  );
 };
 
 /**
@@ -262,20 +405,6 @@ export const getRooms = async (params = {}) => {
 };
 
 /**
- * Get available time slots for a given date/service/therapist.
- * CONTRACT NEEDS CONFIRMATION: /time-slots/available endpoint not yet confirmed.
- */
-export const getAvailableTimeSlots = async (params = {}) => {
-  if (USE_MOCK_DATA) {
-    await mockDelay();
-    return DEFAULT_TIME_SLOTS;
-  }
-  const response = await apiClient.get('/time-slots/available', { params });
-  const slots = extractList(response.data);
-  return slots.length > 0 ? slots : DEFAULT_TIME_SLOTS;
-};
-
-/**
  * Get transaction history for the logged-in customer
  */
 export const getMyTransactions = async (params = {}) => {
@@ -343,18 +472,28 @@ export const updateMyProfile = async (data) => {
   };
 };
 
-/**
- * Cancel an appointment
- */
-export const cancelAppointment = async (appointmentId, reason = '') => {
-  if (USE_MOCK_DATA) {
+export const cancelAppointment = async (
+  appointmentId,
+  reason = ''
+) => {
+  if (USE_MOCK_APPOINTMENTS) {
     await mockDelay();
-    return { id: appointmentId, status: 'CANCELLED', reason };
-  }
-  const response = await apiClient.post(`/appointments/${appointmentId}/cancel`, { reason });
-  return response.data;
-};
 
+    return {
+      id: appointmentId,
+      status: 'CANCELLED',
+      reason,
+    };
+  }
+
+  const response = await apiClient.patch(
+    `/appointments/me/${appointmentId}/cancel`
+  );
+
+  return normalizeAppointment(
+    response.data?.result ?? response.data
+  );
+};
 /**
  * Helpers exposed for components
  */
