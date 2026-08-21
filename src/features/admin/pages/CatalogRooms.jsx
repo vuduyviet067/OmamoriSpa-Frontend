@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Button,
   ConfirmDialog,
@@ -17,64 +17,45 @@ import {
   deleteRoom,
   extractApiError,
   getRoomsAdmin,
-  isInUseError,
   updateRoom,
 } from '@/services/adminService';
 
 const ROOM_TYPES = [
-  { value: 'Standard', label: 'Standard' },
   { value: 'VIP', label: 'VIP' },
-  { value: 'Massage', label: 'Massage' },
-  { value: 'Facial', label: 'Chăm sóc da' },
-  { value: 'Body', label: 'Toàn thân' },
+  { value: 'PERSONAL', label: 'Cá nhân' },
+  { value: 'FAMILY', label: 'Gia đình' },
+  { value: 'NORMAL', label: 'Thường' },
 ];
+const ROOM_TYPE_VALUES = ROOM_TYPES.map((o) => o.value);
 
-const ROOM_STATUS_OPTIONS = [
-  { value: 'available', label: 'Trống' },
-  { value: 'occupied', label: 'Đang sử dụng' },
-  { value: 'maintenance', label: 'Bảo trì' },
-  { value: 'inactive', label: 'Ngừng hoạt động' },
-];
+const STATUS_LABELS = {
+  AVAILABLE: 'Trống',
+  OCCUPIED: 'Đang sử dụng',
+};
 
 const statusVariant = (status) => {
-  switch (status) {
-    case 'available':
-    case 'active':
-      return 'success';
-    case 'occupied':
-    case 'in_use':
-      return 'info';
-    case 'maintenance':
-      return 'warning';
-    case 'inactive':
-    case 'disabled':
-      return 'neutral';
-    default:
-      return 'neutral';
-  }
+  if (status === 'AVAILABLE') return 'success';
+  if (status === 'OCCUPIED') return 'info';
+  return 'neutral';
 };
 
-const statusLabel = (status) => {
-  const opt = ROOM_STATUS_OPTIONS.find((o) => o.value === status);
-  return opt ? opt.label : status;
-};
+const statusLabel = (status) => STATUS_LABELS[status] || status || '-';
 
-const normalizeStatus = (room) => {
-  if (room.status) return room.status;
-  if (typeof room.active === 'boolean') return room.active ? 'available' : 'inactive';
-  if (typeof room.isActive === 'boolean') return room.isActive ? 'available' : 'inactive';
-  return 'available';
-};
+const ROOM_IN_USE_MESSAGE =
+  'Không thể xóa phòng đang được sử dụng.';
 
 function RoomForm({ isOpen, mode, initial, onClose, onSaved }) {
   const isEdit = mode === 'edit';
+  // Backend `isActive` is server-controlled (soft-deleted by DELETE,
+  // no re-activate endpoint). Runtime `status` (AVAILABLE/OCCUPIED) is
+  // owned by appointment-service. The form therefore only edits the
+  // content fields: name, type, price, capacity, note.
   const [form, setForm] = useState({
     name: '',
-    type: 'Standard',
+    type: 'NORMAL',
     price: '',
-    capacity: '2',
+    capacity: '1',
     note: '',
-    status: 'available',
   });
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -85,23 +66,24 @@ function RoomForm({ isOpen, mode, initial, onClose, onSaved }) {
     if (initial) {
       setForm({
         name: initial.name || '',
-        type: initial.type || initial.roomType || 'Standard',
-        price: initial.price !== undefined && initial.price !== null ? String(initial.price) : '',
+        type: ROOM_TYPE_VALUES.includes(initial.type) ? initial.type : 'NORMAL',
+        price:
+          initial.price !== undefined && initial.price !== null
+            ? String(initial.price)
+            : '',
         capacity:
           initial.capacity !== undefined && initial.capacity !== null
             ? String(initial.capacity)
-            : '2',
-        note: initial.note || initial.description || '',
-        status: normalizeStatus(initial),
+            : '1',
+        note: initial.note || '',
       });
     } else {
       setForm({
         name: '',
-        type: 'Standard',
+        type: 'NORMAL',
         price: '',
-        capacity: '2',
+        capacity: '1',
         note: '',
-        status: 'available',
       });
     }
     setErrors({});
@@ -118,15 +100,21 @@ function RoomForm({ isOpen, mode, initial, onClose, onSaved }) {
   const validate = () => {
     const next = {};
     if (!form.name?.trim()) next.name = 'Vui lòng nhập tên phòng.';
-    if (form.price !== '') {
-      const v = Number(form.price);
-      if (Number.isNaN(v)) next.price = 'Giá không hợp lệ.';
-      else if (v < 0) next.price = 'Giá không được âm.';
+    if (!form.type || !ROOM_TYPE_VALUES.includes(form.type)) {
+      next.type = 'Loại phòng không hợp lệ.';
+    }
+    // Mirror CatalogServices: require a positive number; never coerce
+    // Number('') to 0 silently.
+    const priceNum = Number(form.price);
+    if (form.price === '' || Number.isNaN(priceNum)) {
+      next.price = 'Vui lòng nhập giá.';
+    } else if (priceNum <= 0) {
+      next.price = 'Giá phải lớn hơn 0.';
     }
     const cap = Number(form.capacity);
-    if (!form.capacity || Number.isNaN(cap)) {
+    if (form.capacity === '' || Number.isNaN(cap)) {
       next.capacity = 'Vui lòng nhập sức chứa.';
-    } else if (cap <= 0 || !Number.isInteger(cap)) {
+    } else if (!Number.isInteger(cap) || cap < 1) {
       next.capacity = 'Sức chứa phải là số nguyên dương.';
     }
     setErrors(next);
@@ -140,14 +128,14 @@ function RoomForm({ isOpen, mode, initial, onClose, onSaved }) {
     setSubmitting(true);
     setGlobalError(null);
     try {
+      // Content-only payload. No id / status / isActive / active on the
+      // wire - those are server-controlled.
       const payload = {
         name: form.name.trim(),
         type: form.type,
-        price: form.price === '' ? 0 : Number(form.price),
+        price: Number(form.price),
         capacity: Number(form.capacity),
-        note: form.note.trim() || undefined,
-        status: form.status,
-        active: form.status !== 'inactive',
+        note: form.note?.trim() || null,
       };
       let saved;
       if (isEdit && initial?.id) {
@@ -188,7 +176,7 @@ function RoomForm({ isOpen, mode, initial, onClose, onSaved }) {
           value={form.name}
           onChange={handleChange('name')}
           error={errors.name}
-          placeholder="VD: Phòng 1, Phòng VIP A"
+          placeholder="VD: Phòng VIP A, Phòng cá nhân 02"
           required
           autoFocus
         />
@@ -198,13 +186,14 @@ function RoomForm({ isOpen, mode, initial, onClose, onSaved }) {
             value={form.type}
             onChange={handleChange('type')}
             options={ROOM_TYPES}
-            placeholder="Chọn loại"
+            error={errors.type}
           />
           <Input
             label="Sức chứa (người)"
             type="number"
             inputMode="numeric"
             min="1"
+            step="1"
             value={form.capacity}
             onChange={handleChange('capacity')}
             error={errors.capacity}
@@ -215,18 +204,13 @@ function RoomForm({ isOpen, mode, initial, onClose, onSaved }) {
           label="Giá phòng (VND)"
           type="number"
           inputMode="numeric"
-          min="0"
+          min="1"
+          step="1000"
           value={form.price}
           onChange={handleChange('price')}
           error={errors.price}
-          placeholder="0 = miễn phí"
-          helper="Có thể để trống hoặc 0 nếu phòng đã tính trong giá dịch vụ"
-        />
-        <Select
-          label="Trạng thái"
-          value={form.status}
-          onChange={handleChange('status')}
-          options={ROOM_STATUS_OPTIONS}
+          placeholder="VD: 500000"
+          required
         />
         <div className="input-group">
           <label htmlFor="room-note" className="input-label">Ghi chú</label>
@@ -275,15 +259,15 @@ function AdminCatalogRooms() {
     load();
   }, [load]);
 
-  const filtered = (() => {
+  const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return rooms;
     return rooms.filter((r) =>
-      (r.name || '').toLowerCase().includes(q) ||
-      (r.type || '').toLowerCase().includes(q) ||
-      (r.note || r.description || '').toLowerCase().includes(q),
+      (r.name || '').toLowerCase().includes(q)
+      || (r.type || '').toLowerCase().includes(q)
+      || (r.note || '').toLowerCase().includes(q),
     );
-  })();
+  }, [rooms, search]);
 
   const handleAdd = () => {
     setEditing(null);
@@ -300,15 +284,14 @@ function AdminCatalogRooms() {
   const handleSaved = (saved, wasEdit, editId) => {
     setFormOpen(false);
     setEditing(null);
-    if (wasEdit) {
+    if (wasEdit && saved) {
       setRooms((prev) =>
-        prev.map((it) => ((it.id ?? it._id) === editId ? { ...it, ...(saved || {}) } : it)),
+        prev.map((it) => ((it.id ?? it._id) === editId ? { ...it, ...saved } : it)),
       );
     } else if (saved && typeof saved === 'object') {
       const id = saved.id ?? saved._id;
       setRooms((prev) => [{ ...saved, id }, ...prev]);
     }
-    load();
   };
 
   const handleDelete = (room) => {
@@ -320,11 +303,17 @@ function AdminCatalogRooms() {
         try {
           const id = room.id ?? room._id;
           await deleteRoom(id);
+          // Soft-delete succeeded - room is hidden from subsequent
+          // GET /rooms/, so remove it from the UI list.
           setRooms((prev) => prev.filter((it) => (it.id ?? it._id) !== id));
           setConfirm(null);
         } catch (err) {
-          if (isInUseError(err)) {
-            setGlobalError(extractApiError(err));
+          const status = err.response?.status;
+          const backendMessage = err.response?.data?.message || err.message;
+          if (status === 409) {
+            // Room OCCUPIED - do NOT remove from list. Prefer backend's
+            // message; fall back to a friendly default.
+            setGlobalError(backendMessage || ROOM_IN_USE_MESSAGE);
           } else {
             setGlobalError(extractApiError(err, 'Không thể xoá phòng.'));
           }
@@ -396,89 +385,83 @@ function AdminCatalogRooms() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((room) => {
-                  const status = normalizeStatus(room);
-                  return (
-                    <tr key={room.id ?? room._id}>
-                      <td>
-                        <div className="admin-table-name">{room.name}</div>
-                        {room.note && (
-                          <div className="admin-table-sub">
-                            {room.note.length > 60 ? `${room.note.slice(0, 60)}...` : room.note}
-                          </div>
-                        )}
-                      </td>
-                      <td>{room.type || room.roomType || '-'}</td>
-                      <td>{room.capacity ?? '-'} người</td>
-                      <td>{formatCurrency(room.price)}</td>
-                      <td>
-                        <StatusBadge status={statusVariant(status)}>
-                          {statusLabel(status)}
-                        </StatusBadge>
-                      </td>
-                      <td>
-                        <div className="admin-table-actions">
-                          <button
-                            type="button"
-                            className="admin-table-action-btn"
-                            onClick={() => handleEdit(room)}
-                          >
-                            Sửa
-                          </button>
-                          <button
-                            type="button"
-                            className="admin-table-action-btn admin-table-action-btn--danger"
-                            onClick={() => handleDelete(room)}
-                          >
-                            Xoá
-                          </button>
+                {filtered.map((room) => (
+                  <tr key={room.id ?? room._id}>
+                    <td>
+                      <div className="admin-table-name">{room.name}</div>
+                      {room.note && (
+                        <div className="admin-table-sub">
+                          {room.note.length > 60 ? `${room.note.slice(0, 60)}...` : room.note}
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                      )}
+                    </td>
+                    <td>{room.type || '-'}</td>
+                    <td>{room.capacity ?? '-'} người</td>
+                    <td>{formatCurrency(room.price)}</td>
+                    <td>
+                      <StatusBadge status={statusVariant(room.status)}>
+                        {statusLabel(room.status)}
+                      </StatusBadge>
+                    </td>
+                    <td>
+                      <div className="admin-table-actions">
+                        <button
+                          type="button"
+                          className="admin-table-action-btn"
+                          onClick={() => handleEdit(room)}
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          type="button"
+                          className="admin-table-action-btn admin-table-action-btn--danger"
+                          onClick={() => handleDelete(room)}
+                        >
+                          Xoá
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
             <div className="admin-table-cards">
-              {filtered.map((room) => {
-                const status = normalizeStatus(room);
-                return (
-                  <div className="admin-table-card-row" key={`m-${room.id ?? room._id}`}>
-                    <div className="admin-table-card-row-top">
-                      <div>
-                        <div className="admin-table-card-row-title">{room.name}</div>
-                        <div className="admin-table-card-row-sub">{room.type || room.roomType}</div>
-                      </div>
-                      <StatusBadge status={statusVariant(status)}>
-                        {statusLabel(status)}
-                      </StatusBadge>
+              {filtered.map((room) => (
+                <div className="admin-table-card-row" key={`m-${room.id ?? room._id}`}>
+                  <div className="admin-table-card-row-top">
+                    <div>
+                      <div className="admin-table-card-row-title">{room.name}</div>
+                      <div className="admin-table-card-row-sub">{room.type || '-'}</div>
                     </div>
-                    <div className="admin-table-card-row-meta">
-                      <span>Sức chứa: {room.capacity ?? '-'} người</span>
-                      <span>Giá: {formatCurrency(room.price)}</span>
-                    </div>
-                    {room.note && (
-                      <div className="admin-table-card-row-sub">{room.note}</div>
-                    )}
-                    <div className="admin-table-card-row-actions">
-                      <button
-                        type="button"
-                        className="admin-table-action-btn"
-                        onClick={() => handleEdit(room)}
-                      >
-                        Sửa
-                      </button>
-                      <button
-                        type="button"
-                        className="admin-table-action-btn admin-table-action-btn--danger"
-                        onClick={() => handleDelete(room)}
-                      >
-                        Xoá
-                      </button>
-                    </div>
+                    <StatusBadge status={statusVariant(room.status)}>
+                      {statusLabel(room.status)}
+                    </StatusBadge>
                   </div>
-                );
-              })}
+                  <div className="admin-table-card-row-meta">
+                    <span>Sức chứa: {room.capacity ?? '-'} người</span>
+                    <span>Giá: {formatCurrency(room.price)}</span>
+                  </div>
+                  {room.note && (
+                    <div className="admin-table-card-row-sub">{room.note}</div>
+                  )}
+                  <div className="admin-table-card-row-actions">
+                    <button
+                      type="button"
+                      className="admin-table-action-btn"
+                      onClick={() => handleEdit(room)}
+                    >
+                      Sửa
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-table-action-btn admin-table-action-btn--danger"
+                      onClick={() => handleDelete(room)}
+                    >
+                      Xoá
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </>
         )}

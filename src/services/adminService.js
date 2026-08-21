@@ -17,6 +17,10 @@
 // Admin → Danh mục → Dịch vụ has its own dedicated toggle
 // VITE_USE_MOCK_ADMIN_CATALOG_SERVICES so the rest of admin can stay on mocks
 // while this view integrates with the real treatment-service.
+//
+// Admin → Danh mục → Phòng has its own dedicated toggle
+// VITE_USE_MOCK_ADMIN_CATALOG_ROOMS so the rest of admin can stay on mocks
+// while this view integrates with the real room-service.
 
 import apiClient from './api';
 import {
@@ -39,6 +43,11 @@ const USE_MOCK_ADMIN_USERS =
 // which still keeps Room/Cosmetic/Invoice/Report on mocks.
 const USE_MOCK_ADMIN_CATALOG_SERVICES =
   import.meta.env.VITE_USE_MOCK_ADMIN_CATALOG_SERVICES === 'true';
+// Dedicated flag so Admin → Danh mục → Phòng can hit the real room-service
+// backend without flipping the global mock flag, which still keeps
+// Cosmetic / Invoice / Report on mocks.
+const USE_MOCK_ADMIN_CATALOG_ROOMS =
+  import.meta.env.VITE_USE_MOCK_ADMIN_CATALOG_ROOMS === 'true';
 
 // ---- shared helpers (mirrors customerService / therapistService) ------
 const extractList = (payload) => {
@@ -546,61 +555,130 @@ export const deleteService = async (id) => {
 };
 
 // =========================================================
-// Catalog - Rooms (UC10)
+// Catalog - Rooms (P2-B2)
 // =========================================================
+//
+// Real backend integration against room-service:
+//   GET    /rooms/        (collection root, trailing slash; active items)
+//   POST   /rooms/        (create)
+//   GET    /rooms/{id}    (single)
+//   PUT    /rooms/{id}    (update content fields)
+//   DELETE /rooms/{id}    (soft-delete; backend returns 409 when OCCUPIED)
+//
+// Backend schema (RoomResponse):
+//   id, name, type, price, capacity, note, isActive, status
+//
+// Requests only carry content fields: name, type, price, capacity, note.
+// `status` is runtime (AVAILABLE/OCCUPIED) and is owned by
+// appointment-service - the admin form MUST NOT send or edit it.
+// `isActive` is server-controlled (soft-deleted via DELETE; no re-activate
+// endpoint). The catalog form therefore has no status / active toggles.
+
+const ROOM_TYPE_VALUES = ['VIP', 'PERSONAL', 'FAMILY', 'NORMAL'];
 
 const _rooms = [];
 let _nextRoomId = 100;
 let _roomsSeedLoaded = false;
 
-export const getRoomsAdmin = async (params = {}) => {
-  if (USE_MOCK) {
+const _normalizeRoom = (raw) => {
+  if (!raw || typeof raw !== 'object') return raw;
+  const isActive =
+    typeof raw.isActive === 'boolean'
+      ? raw.isActive
+      : typeof raw.active === 'boolean'
+        ? raw.active
+        : true;
+  return {
+    ...raw,
+    id: raw.id,
+    name: raw.name ?? '',
+    type: raw.type ?? null,
+    price: raw.price ?? 0,
+    capacity: raw.capacity ?? 0,
+    note: raw.note ?? '',
+    isActive,
+    active: isActive,
+    status: raw.status ?? 'AVAILABLE',
+  };
+};
+
+const _mockRoomStatusFor = (seed) => {
+  // Mock fixtures never come from the real room-service, so derive a
+  // deterministic runtime status from the seed id so the table can render
+  // the read-only badge. Anything > 100 is treated as OCCUPIED for demo.
+  if (seed && seed.status) return seed.status;
+  const idNum = Number(seed?.id);
+  if (Number.isFinite(idNum) && idNum % 2 === 0) return 'OCCUPIED';
+  return 'AVAILABLE';
+};
+
+export const getRoomsAdmin = async () => {
+  if (USE_MOCK_ADMIN_CATALOG_ROOMS) {
     await _delay(200);
     if (!_roomsSeedLoaded) {
       catalogRooms.forEach((r) => {
         if (!_rooms.find((x) => String(x.id) === String(r.id))) {
+          const typeVal = ROOM_TYPE_VALUES.includes(r.type)
+            ? r.type
+            : (r.name === 'Phòng VIP' ? 'VIP'
+              : r.name === 'Phòng cá nhân' ? 'PERSONAL'
+              : r.name === 'Phòng gia đình' ? 'FAMILY'
+              : 'NORMAL');
           _rooms.push({
-            ...r,
-            active: true,
-            type: r.type || r.description || 'Phòng',
+            id: r.id,
+            name: r.name,
+            type: typeVal,
+            price: 0,
             capacity: r.capacity || 1,
+            note: r.description || r.note || '',
+            isActive: true,
+            active: true,
+            status: _mockRoomStatusFor(r),
           });
         }
       });
       _roomsSeedLoaded = true;
     }
-    const { q = '' } = params || {};
-    const term = String(q || '').toLowerCase().trim();
-    return _rooms
-      .filter((r) =>
-        !term
-        || (r.name || '').toLowerCase().includes(term)
-        || (r.type || '').toLowerCase().includes(term)
-      )
-      .map((r) => ({ ...r }));
+    return _rooms.map((r) => ({ ...r }));
   }
-  return safeList(apiClient.get('/admin/rooms', { params }));
+  // GET /rooms/  (collection root requires trailing slash)
+  // Backend already filters out inactive items (isActive=false), so the
+  // returned list is implicitly "active" - we still derive `active` from
+  // `isActive` for backwards-compat consumers.
+  const res = await apiClient.get('/rooms/');
+  const list = extractList(res.data);
+  return list.map(_normalizeRoom);
 };
 
 export const createRoom = async (payload) => {
-  if (USE_MOCK) {
+  if (USE_MOCK_ADMIN_CATALOG_ROOMS) {
     await _delay(280);
     const id = _nextRoomId++;
+    const typeVal = ROOM_TYPE_VALUES.includes(payload.type) ? payload.type : 'NORMAL';
     const record = {
-      ...payload,
       id,
-      active: payload.active !== false,
+      name: payload.name,
+      type: typeVal,
+      price: Number(payload.price ?? 0),
+      capacity: Number(payload.capacity ?? 1),
+      note: payload.note ?? '',
+      isActive: true,
+      active: true,
+      status: 'AVAILABLE',
       createdAt: new Date().toISOString(),
     };
-    _rooms.push(record);
+    _rooms.unshift(record);
     return { ...record };
   }
-  const res = await apiClient.post('/admin/rooms', payload);
-  return extractObject(res.data);
+  // POST /rooms/
+  // Backend expects: name, type, price, capacity, note.
+  // isActive / id / status are server-controlled and intentionally omitted.
+  const res = await apiClient.post('/rooms/', payload);
+  return _normalizeRoom(extractObject(res.data));
 };
 
 export const updateRoom = async (id, payload) => {
-  if (USE_MOCK) {
+  if (USE_MOCK_ADMIN_CATALOG_ROOMS) {
     await _delay(280);
     const idx = _rooms.findIndex((r) => String(r.id) === String(id));
     if (idx < 0) {
@@ -608,21 +686,43 @@ export const updateRoom = async (id, payload) => {
       err.response = { status: 404 };
       throw err;
     }
-    _rooms[idx] = { ..._rooms[idx], ...payload };
+    const typeVal = ROOM_TYPE_VALUES.includes(payload.type)
+      ? payload.type
+      : _rooms[idx].type;
+    _rooms[idx] = {
+      ..._rooms[idx],
+      ...payload,
+      type: typeVal,
+      price: Number(payload.price ?? _rooms[idx].price ?? 0),
+      capacity: Number(payload.capacity ?? _rooms[idx].capacity ?? 1),
+    };
     return { ..._rooms[idx] };
   }
-  const res = await apiClient.put(`/admin/rooms/${id}`, payload);
-  return extractObject(res.data);
+  // PUT /rooms/{id} - content-only update.
+  // Caller MUST NOT send isActive / active / status. Backend has no
+  // re-activate endpoint; soft-delete is owned by DELETE.
+  const res = await apiClient.put(`/rooms/${id}`, payload);
+  return _normalizeRoom(extractObject(res.data));
 };
 
 export const deleteRoom = async (id) => {
-  if (USE_MOCK) {
+  if (USE_MOCK_ADMIN_CATALOG_ROOMS) {
     await _delay(220);
     const idx = _rooms.findIndex((r) => String(r.id) === String(id));
-    if (idx >= 0) _rooms.splice(idx, 1);
+    if (idx >= 0) {
+      if (_rooms[idx].status === 'OCCUPIED') {
+        const err = new Error('Không thể xóa phòng đang được sử dụng.');
+        err.response = { status: 409, data: { message: err.message } };
+        throw err;
+      }
+      _rooms.splice(idx, 1);
+    }
     return;
   }
-  await apiClient.delete(`/admin/rooms/${id}`);
+  // DELETE /rooms/{id} - backend soft-deletes (isActive=false).
+  // Returns 409 when the room is currently OCCUPIED. The page surfaces the
+  // backend's message verbatim and keeps the room in the table.
+  await apiClient.delete(`/rooms/${id}`);
 };
 
 // =========================================================
