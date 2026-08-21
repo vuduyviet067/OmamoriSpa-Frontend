@@ -27,10 +27,13 @@ import { services as catalogServices } from '@/mocks/services';
 import { rooms as catalogRooms } from '@/mocks/rooms';
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA === 'true';
+const USE_MOCK_ADMIN_USERS =
+  import.meta.env.VITE_USE_MOCK_ADMIN_USERS === 'true';
 
 // ---- shared helpers (mirrors customerService / therapistService) ------
 const extractList = (payload) => {
   if (Array.isArray(payload)) return payload;
+  if (payload && Array.isArray(payload.result)) return payload.result;
   if (payload && Array.isArray(payload.data)) return payload.data;
   if (payload && Array.isArray(payload.items)) return payload.items;
   if (payload && Array.isArray(payload.results)) return payload.results;
@@ -39,9 +42,25 @@ const extractList = (payload) => {
 
 const extractObject = (payload) => {
   if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
-    if (payload.data && typeof payload.data === 'object') return payload.data;
+    if (
+      payload.result
+      && typeof payload.result === 'object'
+      && !Array.isArray(payload.result)
+    ) {
+      return payload.result;
+    }
+
+    if (
+      payload.data
+      && typeof payload.data === 'object'
+      && !Array.isArray(payload.data)
+    ) {
+      return payload.data;
+    }
+
     return payload;
   }
+
   return null;
 };
 
@@ -138,15 +157,17 @@ export const getDashboardOverview = async () => {
 // =========================================================
 
 export const getCustomers = async (params = {}) => {
-  if (USE_MOCK) {
+  if (USE_MOCK_ADMIN_USERS) {
     await _delay(220);
     const { q = '', status = 'ALL' } = params || {};
     const term = String(q || '').toLowerCase().trim();
+
     return _customers
       .filter((c) => {
         if (status === 'ACTIVE' && !c.active) return false;
         if (status === 'INACTIVE' && c.active) return false;
         if (!term) return true;
+
         return (
           (c.name || '').toLowerCase().includes(term)
           || (c.email || '').toLowerCase().includes(term)
@@ -156,38 +177,69 @@ export const getCustomers = async (params = {}) => {
       })
       .map((c) => ({ ...c }));
   }
-  return safeList(apiClient.get('/admin/customers', { params }));
+
+  const res = await apiClient.get('/users/');
+  const users = extractList(res.data);
+
+  return users
+    .filter((user) => user.role === 'CUSTOMER')
+    .map((user) => ({
+      ...user,
+      name: user.fullName,
+    }));
 };
 
 export const getCustomerById = async (id) => {
-  if (USE_MOCK) {
+  if (USE_MOCK_ADMIN_USERS) {
     await _delay(150);
     const c = _customers.find((x) => String(x.id) === String(id));
     return c ? { ...c } : null;
   }
-  try {
-    const res = await apiClient.get(`/admin/customers/${id}`);
-    return extractObject(res.data);
-  } catch (err) {
-    if (err.response?.status === 404) return null;
-    throw err;
+
+  const res = await apiClient.get(`/users/${id}`);
+  const customer = extractObject(res.data);
+
+  if (customer?.role !== 'CUSTOMER') {
+    throw new Error('Người dùng không phải khách hàng.');
   }
+
+  return customer;
 };
 
 export const updateCustomerStatus = async (id, status) => {
-  if (USE_MOCK) {
+  if (USE_MOCK_ADMIN_USERS) {
     await _delay(250);
+
     const c = _customers.find((x) => String(x.id) === String(id));
+
     if (!c) {
       const err = new Error('Không tìm thấy khách hàng.');
       err.response = { status: 404 };
       throw err;
     }
+
     c.active = Boolean(status);
+
     return { ...c };
   }
-  const res = await apiClient.patch(`/admin/customers/${id}/status`, { status });
-  return extractObject(res.data);
+
+  const active =
+    status === true
+    || status === 'active'
+    || status === 'ACTIVE';
+
+  const res = await apiClient.patch(
+    active
+      ? `/users/${id}/unlock`
+      : `/users/${id}/lock`,
+  );
+
+  const user = extractObject(res.data);
+
+  return {
+    ...user,
+    name: user?.fullName,
+  };
 };
 
 // =========================================================
@@ -195,15 +247,18 @@ export const updateCustomerStatus = async (id, status) => {
 // =========================================================
 
 export const getTherapistsAdmin = async (params = {}) => {
-  if (USE_MOCK) {
+  if (USE_MOCK_ADMIN_USERS) {
     await _delay(220);
+
     const { q = '', status = 'ALL' } = params || {};
     const term = String(q || '').toLowerCase().trim();
+
     return _therapists
       .filter((t) => {
         if (status === 'ACTIVE' && !t.active) return false;
         if (status === 'INACTIVE' && t.active) return false;
         if (!term) return true;
+
         return (
           (t.name || '').toLowerCase().includes(term)
           || (t.email || '').toLowerCase().includes(term)
@@ -213,22 +268,41 @@ export const getTherapistsAdmin = async (params = {}) => {
       })
       .map((t) => ({ ...t }));
   }
-  return safeList(apiClient.get('/admin/therapists', { params }));
+
+  const res = await apiClient.get('/users/');
+  const users = extractList(res.data);
+
+  return users
+    .filter((user) => user.role === 'THERAPIST')
+    .map((user) => ({
+      ...user,
+      name: user.fullName,
+    }));
 };
 
 export const getTherapistById = async (id) => {
-  if (USE_MOCK) {
-    await _delay(150);
-    const t = _therapists.find((x) => String(x.id) === String(id));
-    return t ? { ...t } : null;
+  if (USE_MOCK_ADMIN_USERS) {
+    await _delay(180);
+
+    const therapist = _therapists.find(
+      (item) => String(item.id) === String(id)
+    );
+
+    if (!therapist) {
+      throw new Error('Không tìm thấy kỹ thuật viên.');
+    }
+
+    return { ...therapist };
   }
-  try {
-    const res = await apiClient.get(`/admin/therapists/${id}`);
-    return extractObject(res.data);
-  } catch (err) {
-    if (err.response?.status === 404) return null;
-    throw err;
+
+  const res = await apiClient.get(`/users/${id}`);
+  const therapist = extractObject(res.data);
+
+  if (therapist?.role !== 'THERAPIST') {
+    throw new Error('Người dùng không phải kỹ thuật viên.');
   }
+
+  return therapist;
 };
 
 const _mock = {
@@ -241,7 +315,7 @@ const _mock = {
 };
 
 export const createTherapist = async (payload) => {
-  if (USE_MOCK) {
+  if (USE_MOCK_ADMIN_USERS) {
     await _delay(350);
     if (_mock.isDuplicateTherapist(payload.username, payload.email)) {
       const err = new Error('Thông tin nhân sự đã tồn tại trên hệ thống.');
@@ -267,45 +341,64 @@ export const createTherapist = async (payload) => {
     _therapists.unshift(record);
     return { ...record };
   }
-  const res = await apiClient.post('/admin/therapists', payload);
+  const res = await apiClient.post('/users/therapists', payload);
   return extractObject(res.data);
 };
 
 export const updateTherapist = async (id, payload) => {
-  if (USE_MOCK) {
-    await _delay(300);
-    if (_mock.isDuplicateTherapist(payload.username, payload.email, id)) {
-      const err = new Error('Thông tin nhân sự đã tồn tại trên hệ thống.');
-      err.response = { status: 409, data: { message: err.message } };
-      throw err;
+  if (USE_MOCK_ADMIN_USERS) {
+    const index = _therapists.findIndex((item) => item.id === id);
+
+    if (index === -1) {
+      throw new Error('Không tìm thấy kỹ thuật viên.');
     }
-    const t = _therapists.find((x) => String(x.id) === String(id));
-    if (!t) {
-      const err = new Error('Không tìm thấy nhân sự.');
-      err.response = { status: 404 };
-      throw err;
-    }
-    Object.assign(t, payload);
-    return { ...t };
+
+    _therapists[index] = {
+      ..._therapists[index],
+      ...payload,
+    };
+
+    return _therapists[index];
   }
-  const res = await apiClient.put(`/admin/therapists/${id}`, payload);
+
+  const res = await apiClient.put(`/users/therapists/${id}`, payload);
   return extractObject(res.data);
 };
 
 export const updateTherapistStatus = async (id, status) => {
-  if (USE_MOCK) {
+  if (USE_MOCK_ADMIN_USERS) {
     await _delay(220);
+
     const t = _therapists.find((x) => String(x.id) === String(id));
+
     if (!t) {
       const err = new Error('Không tìm thấy nhân sự.');
       err.response = { status: 404 };
       throw err;
     }
+
     t.active = Boolean(status);
+
     return { ...t };
   }
-  const res = await apiClient.patch(`/admin/therapists/${id}/status`, { status });
-  return extractObject(res.data);
+
+  const active =
+    status === true
+    || status === 'active'
+    || status === 'ACTIVE';
+
+  const res = await apiClient.patch(
+    active
+      ? `/users/${id}/unlock`
+      : `/users/${id}/lock`,
+  );
+
+  const user = extractObject(res.data);
+
+  return {
+    ...user,
+    name: user?.fullName,
+  };
 };
 
 // =========================================================

@@ -12,6 +12,8 @@ import useDebouncedValue from '@/hooks/useDebouncedValue';
 import { getInitials } from '@/utils/formatters';
 import {
   getCustomers,
+  getCustomerById,
+  getTherapistById,
   getTherapistsAdmin,
   updateCustomerStatus,
   updateTherapistStatus,
@@ -108,7 +110,7 @@ function CustomerTable({ rows, onView, onToggleStatus, toggling }) {
                 <td>
                   <UserAvatar user={c} />
                 </td>
-                <td>{c.phone || c.phoneNumber || '-'}</td>
+                <td>{c.phone || '-'}</td>
                 <td>{c.createdAt ? new Date(c.createdAt).toLocaleDateString('vi-VN') : '-'}</td>
                 <td>
                   <StatusBadge status={statusVariant(status)}>
@@ -153,7 +155,7 @@ function CustomerTable({ rows, onView, onToggleStatus, toggling }) {
                 </StatusBadge>
               </div>
               <div className="admin-table-card-row-meta">
-                <span>SĐT: {c.phone || c.phoneNumber || '-'}</span>
+                <span>SĐT: {c.phone || '-'}</span>
                 <span>Ngày tham gia: {c.createdAt ? new Date(c.createdAt).toLocaleDateString('vi-VN') : '-'}</span>
               </div>
               <div className="admin-table-card-row-actions">
@@ -203,8 +205,8 @@ function TherapistTable({ rows, onView, onEdit, onToggleStatus, toggling }) {
                 <td>
                   <UserAvatar user={t} />
                 </td>
-                <td>{t.specialty || t.expertise || '-'}</td>
-                <td>{t.phone || t.phoneNumber || '-'}</td>
+                <td>{t.specialization || '-'}</td>
+                <td>{t.phone || '-'}</td>
                 <td>
                   <StatusBadge status={statusVariant(status)}>
                     {statusLabel(status)}
@@ -215,7 +217,11 @@ function TherapistTable({ rows, onView, onEdit, onToggleStatus, toggling }) {
                     <button type="button" className="admin-table-action-btn" onClick={() => onView(t)}>
                       Xem
                     </button>
-                    <button type="button" className="admin-table-action-btn" onClick={() => onEdit(t)}>
+                    <button
+                      type="button"
+                      className="admin-table-action-btn"
+                      onClick={() => onEdit(t)}
+                    >
                       Sửa
                     </button>
                     <button
@@ -246,14 +252,18 @@ function TherapistTable({ rows, onView, onEdit, onToggleStatus, toggling }) {
                 </StatusBadge>
               </div>
               <div className="admin-table-card-row-meta">
-                <span>Chuyên môn: {t.specialty || t.expertise || '-'}</span>
-                <span>SĐT: {t.phone || t.phoneNumber || '-'}</span>
+                <span>Chuyên môn: {t.specialization || '-'}</span>
+                <span>SĐT: {t.phone || '-'}</span>
               </div>
               <div className="admin-table-card-row-actions">
                 <button type="button" className="admin-table-action-btn" onClick={() => onView(t)}>
                   Xem
                 </button>
-                <button type="button" className="admin-table-action-btn" onClick={() => onEdit(t)}>
+                <button
+                  type="button"
+                  className="admin-table-action-btn"
+                  onClick={() => onEdit(t)}
+                >
                   Sửa
                 </button>
                 <button
@@ -339,16 +349,35 @@ function AdminUsers() {
   }, [loadCustomers, loadTherapists]);
 
   const filteredCustomers = useMemo(
-    () => filterByQuery(customers, debouncedSearch, ['name', 'fullName', 'email', 'phone', 'phoneNumber', 'username']),
+    () => filterByQuery(customers, debouncedSearch, ['name', 'fullName', 'email', 'phone']),
     [customers, debouncedSearch],
   );
 
   const filteredTherapists = useMemo(
-    () => filterByQuery(therapists, debouncedSearch, ['name', 'fullName', 'email', 'phone', 'phoneNumber', 'username', 'specialty', 'expertise']),
+    () => filterByQuery(therapists, debouncedSearch, ['name', 'fullName', 'email', 'phone', 'specialization']),
     [therapists, debouncedSearch],
   );
 
-  const handleView = (user) => setViewing({ user, role: tab === 'therapists' ? 'therapist' : 'customer' });
+  const handleView = async (user) => {
+    try {
+      let detail;
+
+      if (user.role === 'THERAPIST') {
+        detail = await getTherapistById(user.id ?? user._id);
+      } else if (user.role === 'CUSTOMER') {
+        detail = await getCustomerById(user.id ?? user._id);
+      } else {
+        detail = user;
+      }
+
+      const role = user.role === 'THERAPIST' ? 'therapist' : 'customer';
+      setViewing({ user: detail, role });
+    } catch (error) {
+      console.error('Không tải được chi tiết người dùng:', error);
+      const role = user.role === 'THERAPIST' ? 'therapist' : 'customer';
+      setViewing({ user, role });
+    }
+  };
 
   const handleToggleStatus = (target, currentStatus) => {
     const id = target.id ?? target._id;
@@ -399,38 +428,27 @@ function AdminUsers() {
   };
 
   const openCreateTherapist = () => {
-    setEditingTherapist(null);
     setTherapistFormMode('create');
+    setEditingTherapist(null);
     setTherapistFormOpen(true);
   };
 
-  const openEditTherapist = (therapist) => {
-    setEditingTherapist(therapist);
-    setTherapistFormMode('edit');
-    setTherapistFormOpen(true);
-  };
-
-  const handleTherapistSaved = (saved) => {
-    if (therapistFormMode === 'create') {
-      // Prepend optimistic record; the API response may or may not contain id yet
-      const record = saved && typeof saved === 'object'
-        ? { ...saved, id: saved?.id ?? saved?._id ?? saved?.user?.id }
-        : null;
-      setTherapists((prev) => (record ? [record, ...prev] : prev));
-    } else {
-      // Replace updated record
-      setTherapists((prev) =>
-        prev.map((it) =>
-          (it.id ?? it._id) === (editingTherapist?.id ?? editingTherapist?._id)
-            ? { ...it, ...(saved || {}) }
-            : it,
-        ),
-      );
+  const openEditTherapist = async (therapist) => {
+    try {
+      const detail = await getTherapistById(therapist.id);
+      setEditingTherapist(detail);
+      setTherapistFormMode('edit');
+      setTherapistFormOpen(true);
+    } catch (error) {
+      console.error('Không tải được chi tiết kỹ thuật viên:', error);
     }
+  };
+
+  const handleTherapistSaved = async () => {
     setTherapistFormOpen(false);
     setEditingTherapist(null);
-    // Best-effort refresh
-    loadTherapists();
+    setTherapistFormMode('create');
+    await loadTherapists();
   };
 
   const isCustomers = tab === 'customers';
@@ -477,7 +495,7 @@ function AdminUsers() {
           value={search}
           onChange={setSearch}
           placeholder={
-            isCustomers ? 'Tìm theo tên, email, SĐT, tên đăng nhập...' : 'Tìm theo tên, email, chuyên môn...'
+            isCustomers ? 'Tìm theo tên, email, SĐT...' : 'Tìm theo tên, email, chuyên môn...'
           }
         />
         <span className="admin-toolbar-spacer" />
@@ -547,7 +565,7 @@ function AdminUsers() {
         </div>
       )}
 
-      {/* Therapist add/edit modal */}
+      {/* Therapist add modal */}
       <TherapistForm
         isOpen={therapistFormOpen}
         mode={therapistFormMode}
@@ -555,6 +573,7 @@ function AdminUsers() {
         onClose={() => {
           setTherapistFormOpen(false);
           setEditingTherapist(null);
+          setTherapistFormMode('create');
         }}
         onSaved={handleTherapistSaved}
       />

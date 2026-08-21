@@ -9,58 +9,56 @@ import {
 
 /**
  * Modal form for adding or editing a therapist.
- *
- * Fields are defensive defaults only - the backend decides which fields are
- * actually required. We surface backend errors (e.g. duplicate personnel)
- * inline rather than swallowing them.
+ * Fields match the backend User creation/update schema:
+ *   fullName, email, password (create only), dateOfBirth, gender, phone, address,
+ *   specialization, experience
  */
+const emptyForm = {
+  fullName: '',
+  email: '',
+  password: '',
+  dateOfBirth: '',
+  gender: '',
+  phone: '',
+  address: '',
+  specialization: '',
+  experience: '',
+};
+
 function TherapistForm({
   isOpen,
   mode = 'create',
-  initial,
+  initial = null,
   onClose,
   onSaved,
 }) {
-  const isEdit = mode === 'edit';
-  const [form, setForm] = useState({
-    username: '',
-    password: '',
-    name: '',
-    email: '',
-    phone: '',
-    specialty: '',
-    bio: '',
-  });
+  const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [globalError, setGlobalError] = useState(null);
 
   useEffect(() => {
     if (!isOpen) return;
-    if (initial) {
+
+    if (mode === 'edit' && initial) {
       setForm({
-        username: initial.username || initial.account?.username || '',
-        password: '',
-        name: initial.name || initial.fullName || '',
+        fullName: initial.fullName || '',
         email: initial.email || '',
-        phone: initial.phone || initial.phoneNumber || '',
-        specialty: initial.specialty || initial.expertise || '',
-        bio: initial.bio || initial.description || '',
+        password: '',
+        dateOfBirth: initial.dateOfBirth || '',
+        gender: initial.gender || '',
+        phone: initial.phone || '',
+        address: initial.address || '',
+        specialization: initial.specialization || '',
+        experience: initial.experience || '',
       });
     } else {
-      setForm({
-        username: '',
-        password: '',
-        name: '',
-        email: '',
-        phone: '',
-        specialty: '',
-        bio: '',
-      });
+      setForm(emptyForm);
     }
+
     setErrors({});
     setGlobalError(null);
-  }, [isOpen, initial]);
+  }, [isOpen, mode, initial]);
 
   const handleChange = (field) => (e) => {
     const value = e?.target?.value ?? e;
@@ -71,18 +69,54 @@ function TherapistForm({
 
   const validate = () => {
     const next = {};
-    if (!form.name?.trim()) next.name = 'Vui lòng nhập họ và tên.';
-    if (!isEdit) {
-      if (!form.username?.trim()) next.username = 'Vui lòng nhập tên đăng nhập.';
-      if (!form.password?.trim() || form.password.length < 6) {
-        next.password = 'Mật khẩu tối thiểu 6 ký tự.';
-      }
-    } else if (form.password && form.password.length > 0 && form.password.length < 6) {
-      next.password = 'Mật khẩu tối thiểu 6 ký tự.';
+
+    if (!form.fullName?.trim()) {
+      next.fullName = 'Vui lòng nhập họ và tên.';
     }
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+
+    if (!form.email?.trim()) {
+      next.email = 'Vui lòng nhập email.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
       next.email = 'Email không đúng định dạng.';
     }
+
+    if (mode === 'create') {
+      if (!form.password) {
+        next.password = 'Vui lòng nhập mật khẩu.';
+      } else if (!/^(?=.*[A-Z])(?=.*[a-z])(?=.*\d).{6,}$/.test(form.password)) {
+        next.password =
+          'Mật khẩu tối thiểu 6 ký tự, có chữ hoa, chữ thường và số.';
+      }
+    }
+
+    if (!form.dateOfBirth) {
+      next.dateOfBirth = 'Vui lòng chọn ngày sinh.';
+    }
+
+    if (!form.gender) {
+      next.gender = 'Vui lòng chọn giới tính.';
+    }
+
+    if (!form.phone?.trim()) {
+      next.phone = 'Vui lòng nhập số điện thoại.';
+    } else if (!/^(0|\+84)[0-9]{9,10}$/.test(form.phone.trim())) {
+      next.phone = 'Số điện thoại không đúng định dạng.';
+    }
+
+    if (!form.address?.trim()) {
+      next.address = 'Vui lòng nhập địa chỉ.';
+    }
+
+    if (!form.specialization?.trim()) {
+      next.specialization = 'Vui lòng nhập chuyên môn.';
+    }
+
+    if (!form.experience?.trim()) {
+      next.experience = 'Vui lòng nhập kinh nghiệm.';
+    } else if (!/^\d{1,2}$/.test(form.experience.trim())) {
+      next.experience = 'Kinh nghiệm phải là số năm từ 0 đến 99.';
+    }
+
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -93,33 +127,53 @@ function TherapistForm({
     if (!validate()) return;
     setSubmitting(true);
     setGlobalError(null);
+
     try {
-      const payload = {
-        name: form.name.trim(),
-        email: form.email.trim() || undefined,
-        phone: form.phone.trim() || undefined,
-        specialty: form.specialty.trim() || undefined,
-        bio: form.bio.trim() || undefined,
-      };
-      let saved;
-      if (isEdit && initial?.id) {
-        if (form.username?.trim()) payload.username = form.username.trim();
-        if (form.password?.trim()) payload.password = form.password;
-        saved = await updateTherapist(initial.id, payload);
-      } else {
-        payload.username = form.username.trim();
-        payload.password = form.password;
-        saved = await createTherapist(payload);
+      if (mode === 'edit') {
+        const payload = {
+          fullName: form.fullName.trim(),
+          email: form.email.trim(),
+          dateOfBirth: form.dateOfBirth,
+          gender: form.gender,
+          phone: form.phone.trim(),
+          address: form.address.trim(),
+          specialization: form.specialization.trim(),
+          experience: form.experience.trim(),
+        };
+
+        const saved = await updateTherapist(initial.id, payload);
+
+        if (onSaved) {
+          await onSaved(saved);
+        }
+
+        return;
       }
-      if (onSaved) onSaved(saved);
+
+      const payload = {
+        fullName: form.fullName.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        role: 'THERAPIST',
+        dateOfBirth: form.dateOfBirth,
+        gender: form.gender,
+        phone: form.phone.trim(),
+        address: form.address.trim(),
+        specialization: form.specialization.trim(),
+        experience: form.experience.trim(),
+      };
+
+      const saved = await createTherapist(payload);
+
+      if (onSaved) {
+        await onSaved(saved);
+      }
     } catch (err) {
-      // Special-case duplicate personnel
       if (isDuplicateError(err)) {
         setGlobalError('Thông tin nhân sự đã tồn tại trên hệ thống.');
-        // Highlight likely conflicting fields
         setErrors((prev) => ({
           ...prev,
-          username: ' ',
+          email: ' ',
         }));
       } else {
         setGlobalError(extractApiError(err, 'Không thể lưu thông tin kỹ thuật viên.'));
@@ -133,14 +187,18 @@ function TherapistForm({
     <Modal
       isOpen={isOpen}
       onClose={submitting ? () => {} : onClose}
-      title={isEdit ? 'Chỉnh sửa kỹ thuật viên' : 'Thêm kỹ thuật viên'}
+      title={mode === 'edit' ? 'Sửa kỹ thuật viên' : 'Thêm kỹ thuật viên'}
       size="lg"
       closeOnOverlayClick={!submitting}
       footer={(
         <>
           <Button variant="ghost" onClick={onClose} disabled={submitting}>Hủy</Button>
           <Button onClick={handleSubmit} loading={submitting}>
-            {isEdit ? 'Lưu thay đổi' : 'Thêm kỹ thuật viên'}
+            {submitting
+              ? 'Đang lưu...'
+              : mode === 'edit'
+                ? 'Lưu thay đổi'
+                : 'Thêm kỹ thuật viên'}
           </Button>
         </>
       )}
@@ -153,20 +211,22 @@ function TherapistForm({
         <div className="admin-form-row">
           <Input
             label="Họ và tên"
-            value={form.name}
-            onChange={handleChange('name')}
-            error={errors.name}
+            value={form.fullName}
+            onChange={handleChange('fullName')}
+            error={errors.fullName}
             placeholder="Nguyễn Văn A"
             required
             autoFocus
           />
+
           <Input
             label="Số điện thoại"
             type="tel"
             value={form.phone}
             onChange={handleChange('phone')}
-            placeholder="0901 234 567"
             error={errors.phone}
+            placeholder="0912345678"
+            required
           />
         </div>
 
@@ -175,57 +235,76 @@ function TherapistForm({
           type="email"
           value={form.email}
           onChange={handleChange('email')}
-          placeholder="example@omamori.vn"
           error={errors.email}
+          placeholder="example@omamori.vn"
+          required
         />
 
-        <div className="divider" />
-
-        <div className="admin-form-row">
+        {mode === 'create' && (
           <Input
-            label="Tên đăng nhập"
-            value={form.username}
-            onChange={handleChange('username')}
-            placeholder={isEdit ? '(giữ nguyên nếu không đổi)' : 'kythuatvien.ten'}
-            error={errors.username}
-            disabled={isEdit}
-          />
-          <Input
-            label={isEdit ? 'Mật khẩu mới (tùy chọn)' : 'Mật khẩu'}
+            label="Mật khẩu"
             type="password"
             value={form.password}
             onChange={handleChange('password')}
-            placeholder="••••••••"
             error={errors.password}
-            helper={isEdit ? 'Để trống nếu không muốn đổi mật khẩu' : 'Tối thiểu 6 ký tự'}
+            helper="Tối thiểu 6 ký tự, gồm chữ hoa, chữ thường và số"
+            required
+          />
+        )}
+
+        <div className="admin-form-row">
+          <Input
+            label="Ngày sinh"
+            type="date"
+            value={form.dateOfBirth}
+            onChange={handleChange('dateOfBirth')}
+            error={errors.dateOfBirth}
+            required
+          />
+
+          <Select
+            label="Giới tính"
+            value={form.gender}
+            onChange={handleChange('gender')}
+            options={[
+              { value: 'MALE', label: 'Nam' },
+              { value: 'FEMALE', label: 'Nữ' },
+              { value: 'OTHER', label: 'Khác' },
+            ]}
+            placeholder="Chọn giới tính"
+            error={errors.gender}
           />
         </div>
 
-        <div className="divider" />
-
-        <Select
-          label="Chuyên môn"
-          value={form.specialty}
-          onChange={handleChange('specialty')}
-          options={[
-            { value: 'Massage body', label: 'Massage body' },
-            { value: 'Massage foot', label: 'Massage foot' },
-            { value: 'Massage đá nóng', label: 'Massage đá nóng' },
-            { value: 'Chăm sóc da mặt', label: 'Chăm sóc da mặt' },
-            { value: 'Spa trị liệu', label: 'Spa trị liệu' },
-          ]}
-          placeholder="Chọn chuyên môn"
+        <Input
+          label="Địa chỉ"
+          value={form.address}
+          onChange={handleChange('address')}
+          error={errors.address}
+          placeholder="Hà Nội"
+          required
         />
 
-        <div className="input-group">
-          <label htmlFor="therapist-bio" className="input-label">Mô tả / ghi chú</label>
-          <textarea
-            id="therapist-bio"
-            className="admin-textarea"
-            value={form.bio}
-            onChange={handleChange('bio')}
-            placeholder="Mô tả ngắn về kỹ thuật viên (kinh nghiệm, kỹ năng nổi bật...)"
-            rows={3}
+        <div className="admin-form-row">
+          <Input
+            label="Chuyên môn"
+            value={form.specialization}
+            onChange={handleChange('specialization')}
+            error={errors.specialization}
+            placeholder="Massage trị liệu"
+            required
+          />
+
+          <Input
+            label="Kinh nghiệm (năm)"
+            type="number"
+            min="0"
+            max="99"
+            value={form.experience}
+            onChange={handleChange('experience')}
+            error={errors.experience}
+            placeholder="3"
+            required
           />
         </div>
       </form>
