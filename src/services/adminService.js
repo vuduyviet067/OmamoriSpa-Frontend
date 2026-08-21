@@ -3,7 +3,8 @@
 //   - /admin/dashboard (overview)
 //   - /admin/customers (UC09)
 //   - /admin/therapists (UC09 - incl. create/update)
-//   - /admin/services, /admin/rooms, /admin/cosmetics (UC10)
+//   - /rooms/, /admin/rooms, /admin/cosmetics (UC10)
+//   - /treatments/ (P2-B1: Admin Catalog - Services via treatment-service)
 //   - /admin/inventory (UC10/UC11)
 //   - /admin/invoices, /admin/invoices/pay (UC11)
 //   - /admin/reports (UC12)
@@ -12,6 +13,10 @@
 // against an in-memory mock layer (src/mocks/admin.js). Mock and real flows
 // are deliberately separate so backend integration will swap implementations
 // without touching pages.
+//
+// Admin → Danh mục → Dịch vụ has its own dedicated toggle
+// VITE_USE_MOCK_ADMIN_CATALOG_SERVICES so the rest of admin can stay on mocks
+// while this view integrates with the real treatment-service.
 
 import apiClient from './api';
 import {
@@ -29,6 +34,11 @@ import { rooms as catalogRooms } from '@/mocks/rooms';
 const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA === 'true';
 const USE_MOCK_ADMIN_USERS =
   import.meta.env.VITE_USE_MOCK_ADMIN_USERS === 'true';
+// Dedicated flag so Admin → Danh mục → Dịch vụ can hit the real
+// treatment-service backend without flipping the global mock flag,
+// which still keeps Room/Cosmetic/Invoice/Report on mocks.
+const USE_MOCK_ADMIN_CATALOG_SERVICES =
+  import.meta.env.VITE_USE_MOCK_ADMIN_CATALOG_SERVICES === 'true';
 
 // ---- shared helpers (mirrors customerService / therapistService) ------
 const extractList = (payload) => {
@@ -402,60 +412,100 @@ export const updateTherapistStatus = async (id, status) => {
 };
 
 // =========================================================
-// Catalog - Services (UC10)
+// Catalog - Services (P2-B1)
 // =========================================================
+//
+// Real backend integration against treatment-service:
+//   GET    /treatments/
+//   POST   /treatments/        (create)
+//   GET    /treatments/{id}    (single, optional)
+//   PUT    /treatments/{id}    (update content)
+//   DELETE /treatments/{id}    (soft-deactivate; backend hides inactive
+//                                items from subsequent GET /treatments/)
+//
+// Backend schema (TreatmentResponse):
+//   id, name, category, price, durationMinutes, description, isActive
+//
+// Requests only carry content fields. isActive is server-controlled.
+// All *UI-side* fields (duration, active) are derived from the wire
+// schema inside the service so pages don't have to.
 
 const _services = [];
 let _servicesSeedLoaded = false;
 
-export const getServicesAdmin = async (params = {}) => {
-  if (USE_MOCK) {
+const _normalizeTreatment = (raw) => {
+  if (!raw || typeof raw !== 'object') return raw;
+  const duration = Number(raw.durationMinutes ?? raw.duration ?? 0) || 0;
+  const active =
+    typeof raw.isActive === 'boolean'
+      ? raw.isActive
+      : typeof raw.active === 'boolean'
+        ? raw.active
+        : true;
+  return {
+    ...raw,
+    id: raw.id,
+    name: raw.name ?? '',
+    category: raw.category ?? null,
+    price: raw.price ?? 0,
+    duration,
+    durationMinutes: duration,
+    description: raw.description ?? '',
+    active,
+    isActive: typeof raw.isActive === 'boolean' ? raw.isActive : active,
+  };
+};
+
+export const getServicesAdmin = async () => {
+  if (USE_MOCK_ADMIN_CATALOG_SERVICES) {
     await _delay(200);
     if (!_servicesSeedLoaded) {
-      // Lazy-seed from catalog mocks so toggling existing services still works.
       catalogServices.forEach((s) => {
         if (!_services.find((x) => String(x.id) === String(s.id))) {
-          _services.push({ ...s, active: true });
+          _services.push({ ...s, active: true, isActive: true });
         }
       });
       _servicesSeedLoaded = true;
     }
-    const { q = '' } = params || {};
-    const term = String(q || '').toLowerCase().trim();
-    return _services
-      .filter((s) =>
-        !term
-        || (s.name || '').toLowerCase().includes(term)
-        || (s.description || '').toLowerCase().includes(term)
-      )
-      .map((s) => ({ ...s }));
+    return _services.map((s) => ({ ...s }));
   }
-  return safeList(apiClient.get('/admin/services', { params }));
+  // GET /treatments/  (collection root requires trailing slash)
+  // Backend already filters out inactive items, so the returned list is
+  // implicitly "active" - we still derive `active` from `isActive` for
+  // backwards-compat consumers.
+  const res = await apiClient.get('/treatments/');
+  const list = extractList(res.data);
+  return list.map(_normalizeTreatment);
 };
 
 export const createService = async (payload) => {
-  if (USE_MOCK) {
+  if (USE_MOCK_ADMIN_CATALOG_SERVICES) {
     await _delay(280);
     const id = 1000 + _services.length + 1;
     const record = {
       ...payload,
       id,
+      durationMinutes: Number(payload.durationMinutes ?? payload.duration ?? 0),
+      duration: Number(payload.durationMinutes ?? payload.duration ?? 0),
       active: payload.active !== false,
+      isActive: payload.active !== false,
       createdAt: new Date().toISOString(),
     };
-    _services.push(record);
-    return { ...record };
+    _services.unshift(record);
+    return _normalizeTreatment(record);
   }
-  const res = await apiClient.post('/admin/services', payload);
-  return extractObject(res.data);
+  // POST /treatments/
+  // Backend expects: name, category, price, durationMinutes, description.
+  // isActive/id are server-controlled and intentionally omitted.
+  const res = await apiClient.post('/treatments/', payload);
+  return _normalizeTreatment(extractObject(res.data));
 };
 
 export const updateService = async (id, payload) => {
-  if (USE_MOCK) {
+  if (USE_MOCK_ADMIN_CATALOG_SERVICES) {
     await _delay(280);
     const idx = _services.findIndex((s) => String(s.id) === String(id));
     if (idx < 0) {
-      // Mirror the seed catalogue so toggle still works.
       const seed = catalogServices.find((s) => String(s.id) === String(id));
       if (!seed) {
         const err = new Error('Không tìm thấy dịch vụ.');
@@ -464,22 +514,35 @@ export const updateService = async (id, payload) => {
       }
       _services.push({ ...seed, ...payload });
     } else {
-      _services[idx] = { ..._services[idx], ...payload };
+      _services[idx] = {
+        ..._services[idx],
+        ...payload,
+        durationMinutes: Number(payload.durationMinutes ?? payload.duration ?? _services[idx].durationMinutes),
+        duration: Number(payload.durationMinutes ?? payload.duration ?? _services[idx].duration),
+      };
     }
-    return { ..._services.find((s) => String(s.id) === String(id)) };
+    return _normalizeTreatment(
+      _services.find((s) => String(s.id) === String(id)),
+    );
   }
-  const res = await apiClient.put(`/admin/services/${id}`, payload);
-  return extractObject(res.data);
+  // PUT /treatments/{id} - content-only update.
+  // Caller MUST NOT send isActive / active. Backend has no re-activate
+  // endpoint; toggling is owned by DELETE (soft-deactivate).
+  const res = await apiClient.put(`/treatments/${id}`, payload);
+  return _normalizeTreatment(extractObject(res.data));
 };
 
 export const deleteService = async (id) => {
-  if (USE_MOCK) {
+  if (USE_MOCK_ADMIN_CATALOG_SERVICES) {
     await _delay(220);
     const idx = _services.findIndex((s) => String(s.id) === String(id));
     if (idx >= 0) _services.splice(idx, 1);
     return;
   }
-  await apiClient.delete(`/admin/services/${id}`);
+  // DELETE /treatments/{id} - backend soft-deactivates (isActive=false).
+  // Subsequent GET /treatments/ therefore hides the item - the page
+  // removes it from the UI list on success.
+  await apiClient.delete(`/treatments/${id}`);
 };
 
 // =========================================================
