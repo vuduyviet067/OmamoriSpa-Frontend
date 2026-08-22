@@ -907,19 +907,63 @@ export const getTransactionById = async (
 /**
  * Create VNPay payment URL
  * for invoice owned by logged-in customer.
+ *
+ * Backend contract (payment-service):
+ *   POST /payments/me/{id}/vnpay/create
+ *   Authorization: Bearer <CUSTOMER JWT>
+ *   Response: ApiResponse<VnPayPaymentUrlResponse> where
+ *     VnPayPaymentUrlResponse = { paymentUrl, txnRef }
+ *
+ * Error contract observed via direct gateway test (PENDING invoice,
+ * merchant credentials empty in env): backend VNPayService.hmacSHA512 throws
+ * InvalidKeyException which surfaces as HTTP 500 + ApiResponse
+ *   { code: 9999, message: "Uncategorized error" }
+ * (ErrorCode.UNCATEGORIZED_EXCEPTION = 9999 / INTERNAL_SERVER_ERROR).
+ *
+ * Scope rule (intentionally narrow):
+ *  - Only remap when the failing call is exactly THIS POST vnpay/create,
+ *    response status is HTTP 500, and the body code is exactly 9999.
+ *  - 9999 is a generic "uncategorized" bucket on the backend and is also
+ *    used for other unrelated failures, so we MUST gate by HTTP 500 + this
+ *    exact endpoint to avoid swallowing real system errors elsewhere.
+ *  - 1001 "Uncategorized error" (InvalidKey, BAD_REQUEST) is intentionally
+ *    left untouched — caller renders backend message as-is.
+ *  - 401/403/404/400 with non-9999 code: render backend message normally.
+ *  - 500 with non-9999 code: render backend message normally.
+ *
+ * On the remapped case, we throw a fresh Error (no `err.response`) so the
+ * existing error chain in Transactions.jsx
+ *   err.response?.data?.message || err.message || fallback
+ * picks up the friendly message and skips redirect / fake-success.
  */
 export const createVnPayPayment = async (
   transactionId
 ) => {
-  const response =
-    await apiClient.post(
-      `/payments/me/${transactionId}/vnpay/create`
-    );
+  try {
+    const response =
+      await apiClient.post(
+        `/payments/me/${transactionId}/vnpay/create`
+      );
 
-  return (
-    response.data?.result ??
-    response.data
-  );
+    return (
+      response.data?.result ??
+      response.data
+    );
+  } catch (err) {
+    const status = err?.response?.status;
+    const code = err?.response?.data?.code;
+    if (
+      status === 500
+      && code === 9999
+    ) {
+      const friendly = new Error(
+        'Thanh toán trực tuyến hiện chưa được cấu hình.'
+      );
+      friendly.code = 'VNPAY_MERCHANT_NOT_CONFIGURED';
+      throw friendly;
+    }
+    throw err;
+  }
 };
 
 
