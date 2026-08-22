@@ -48,6 +48,10 @@ const USE_MOCK_ADMIN_CATALOG_SERVICES =
 // Cosmetic / Invoice / Report on mocks.
 const USE_MOCK_ADMIN_CATALOG_ROOMS =
   import.meta.env.VITE_USE_MOCK_ADMIN_CATALOG_ROOMS === 'true';
+// Dedicated flag so Admin → Hóa đơn & thanh toán can hit the real
+// payment-service backend without flipping the global mock flag.
+const USE_MOCK_ADMIN_INVOICES =
+  import.meta.env.VITE_USE_MOCK_ADMIN_INVOICES === 'true';
 
 // ---- shared helpers (mirrors customerService / therapistService) ------
 const extractList = (payload) => {
@@ -151,6 +155,29 @@ export const isInUseError = (err) => {
   if (status === 409 || status === 422 || status === 400) return true;
   const message = err.response?.data?.message || err.message || '';
   return /đang được sử dụng|in use|in-use|đang dùng|being used/i.test(message);
+};
+
+/**
+ * Detect "stale state" errors from the backend where the resource has
+ * already been mutated by another session/request (e.g. invoice moved from
+ * PENDING_PAYMENT to PAID before the current confirm-payment could land).
+ * The page should refresh and surface the backend message instead of the
+ * generic fallback error.
+ *
+ * Identified by:
+ *  - HTTP 400/409/422, and
+ *  - either an explicit business code (1053 = "Hóa đơn không ở trạng thái
+ *    Chờ thanh toán"), or
+ *  - a Vietnamese phrasing that mentions status/trạng thái.
+ */
+export const isStaleStateError = (err) => {
+  if (!err) return false;
+  const status = err.response?.status;
+  if (status !== 400 && status !== 409 && status !== 422) return false;
+  const code = err.response?.data?.code;
+  if (code === 1053) return true;
+  const message = err.response?.data?.message || err.message || '';
+  return /trạng thái|status|đã (được )?(thanh toán|hủy|paid|cancelled|chuyển)|not in (the )?(right |correct )?status|invalid state/i.test(message);
 };
 
 // =========================================================
@@ -939,9 +966,32 @@ export const stockInInventory = async (inventoryId, payload) => {
 // =========================================================
 // Invoices & Payments
 // =========================================================
+//
+// Real backend integration against payment-service (gateway:
+//   GET    /payments/                          list invoices
+//   POST   /payments/                          create (appointment or retail)
+//   GET    /payments/{id}                      single invoice
+//   PATCH  /payments/{id}/confirm-payment      mark paid ({ paymentMethod })
+//   PATCH  /payments/{id}/cancel               cancel pending invoice
+//
+// InvoiceResponse wire schema (kept here for reference):
+//   {
+//     id, customerId, appointmentId, status, paymentMethod,
+//     totalAmount, items: [{ id, itemType, referenceId, itemName,
+//                            unitPrice, quantity, subtotal }],
+//     createdAt, paidAt
+//   }
+// PaymentMethod: CASH | BANK_TRANSFER  (no CARD; VNPay maps to BANK_TRANSFER)
+// InvoiceStatus: PENDING_PAYMENT | PAID | CANCELLED
+//
+// When creating from an appointment, callers send { appointmentId } and the
+// backend derives service/room/cosmetic line items from the appointment +
+// its CosmeticOrder. When creating a retail invoice, callers send
+// { customerId, cosmeticItems: [{ cosmeticId, quantity }] } - the backend
+// looks up names/prices and snapshots them into InvoiceItem records.
 
 export const getInvoices = async (params = {}) => {
-  if (USE_MOCK) {
+  if (USE_MOCK_ADMIN_INVOICES) {
     await _delay(220);
     const { q = '', status = 'ALL' } = params || {};
     const term = String(q || '').toLowerCase().trim();
@@ -954,13 +1004,30 @@ export const getInvoices = async (params = {}) => {
           || (inv.customerName || '').toLowerCase().includes(term)
         );
       })
-      .map((inv) => ({ ...inv, items: (inv.items || []).map((it) => ({ ...it })) }));
+      .map((inv) => ({
+        ...inv,
+        items: (inv.items || []).map((it) => ({ ...it })),
+      }));
   }
-  return safeList(apiClient.get('/admin/invoices', { params }));
+  // GET /payments/  (collection root requires trailing slash; some gateways
+  // strip it but axios will keep what we send).
+  // Backend does not honour query params (notably ?status=), so always fetch
+  // the full list and apply status / free-text filters on the client.
+  const { status, q } = params || {};
+  const list = await safeList(apiClient.get('/payments/'));
+  const term = String(q || '').toLowerCase().trim();
+  return list.filter((inv) => {
+    if (status && status !== 'ALL' && inv.status !== status) return false;
+    if (!term) return true;
+    return (
+      (inv.code || inv.invoiceCode || '').toLowerCase().includes(term)
+      || (inv.customerName || '').toLowerCase().includes(term)
+    );
+  });
 };
 
 export const getInvoiceById = async (id) => {
-  if (USE_MOCK) {
+  if (USE_MOCK_ADMIN_INVOICES) {
     await _delay(150);
     const inv = _invoices.find((x) => String(x.id) === String(id));
     return inv
@@ -969,7 +1036,7 @@ export const getInvoiceById = async (id) => {
   }
   if (!id) return null;
   try {
-    const res = await apiClient.get(`/admin/invoices/${id}`);
+    const res = await apiClient.get(`/payments/${id}`);
     return extractObject(res.data);
   } catch (err) {
     if (err.response?.status === 404) return null;
@@ -978,10 +1045,11 @@ export const getInvoiceById = async (id) => {
 };
 
 /**
- * Create a new invoice from an appointment (Flow 1).
+ * Create a new invoice from a completed appointment (Flow 1).
+ * Backend derives line items itself; FE only sends appointmentId.
  */
-export const createInvoiceFromAppointment = async (appointmentId, payload = {}) => {
-  if (USE_MOCK) {
+export const createInvoiceFromAppointment = async (appointmentId) => {
+  if (USE_MOCK_ADMIN_INVOICES) {
     await _delay(280);
     const apt = _appointmentsSeed.find((a) => String(a.id) === String(appointmentId));
     if (!apt) {
@@ -989,25 +1057,18 @@ export const createInvoiceFromAppointment = async (appointmentId, payload = {}) 
       err.response = { status: 404 };
       throw err;
     }
-    const items = (payload.cosmeticItems || []).map((it, idx) => ({
-      id: 9000 + idx,
-      name: it.name || 'Mỹ phẩm',
-      type: 'COSMETIC',
-      quantity: Number(it.quantity || 1),
-      unitPrice: Number(it.unitPrice || 0),
-      total: Number(it.quantity || 1) * Number(it.unitPrice || 0),
-    }));
+    const items = [];
     if (apt.price) {
-      items.unshift({
+      items.push({
         id: 9001,
-        name: apt.serviceName || apt.service?.name || 'Dịch vụ',
-        type: 'SERVICE',
+        itemType: 'SERVICE',
+        itemName: apt.serviceName || apt.service?.name || 'Dịch vụ',
         quantity: 1,
         unitPrice: apt.price,
-        total: apt.price,
+        subtotal: apt.price,
       });
     }
-    const totalAmount = items.reduce((s, it) => s + (it.total || 0), 0);
+    const totalAmount = items.reduce((s, it) => s + (it.subtotal || 0), 0);
     const id = _nextInvoiceId++;
     const code = `INV-${new Date().getFullYear()}-${String(id).padStart(4, '0')}`;
     const record = {
@@ -1022,39 +1083,46 @@ export const createInvoiceFromAppointment = async (appointmentId, payload = {}) 
       subtotal: totalAmount,
       totalAmount,
       amount: totalAmount,
-      status: 'PENDING',
+      status: 'PENDING_PAYMENT',
       paidAt: null,
       createdAt: new Date().toISOString(),
       date: new Date().toISOString().slice(0, 10),
       paymentMethod: null,
+      type: 'APPOINTMENT',
     };
     _invoices.unshift(record);
     return { ...record };
   }
-  const res = await apiClient.post(
-    `/admin/invoices/from-appointment/${appointmentId}`,
-    payload,
-  );
+  // POST /payments/ with { appointmentId }
+  const res = await apiClient.post('/payments/', { appointmentId });
   return extractObject(res.data);
 };
 
 /**
  * Create a retail invoice (Flow 2) selling one or more cosmetics.
+ * Backend looks up names/prices; FE only sends ids and quantities.
  */
 export const createRetailInvoice = async (payload) => {
-  if (USE_MOCK) {
+  if (USE_MOCK_ADMIN_INVOICES) {
     await _delay(280);
     const customerId = payload.customerId || 1;
     const customer = _customers.find((c) => c.id === customerId) || _customers[0];
-    const items = (payload.items || []).map((it, idx) => ({
-      id: 9000 + idx,
-      name: it.name || 'Mỹ phẩm',
-      type: 'COSMETIC',
-      quantity: Number(it.quantity || 1),
-      unitPrice: Number(it.unitPrice || 0),
-      total: Number(it.quantity || 1) * Number(it.unitPrice || 0),
-    }));
-    const totalAmount = items.reduce((s, it) => s + (it.total || 0), 0);
+    const items = (payload.cosmeticItems || payload.items || []).map((it, idx) => {
+      const catalog = _inventory.find((c) => String(c.id) === String(it.cosmeticId));
+      const unitPrice = Number(
+        it.unitPrice ?? catalog?.price ?? catalog?.unitPrice ?? 0,
+      );
+      const quantity = Number(it.quantity || 1);
+      return {
+        id: 9000 + idx,
+        itemType: 'COSMETIC',
+        itemName: catalog?.name || it.name || 'Mỹ phẩm',
+        quantity,
+        unitPrice,
+        subtotal: unitPrice * quantity,
+      };
+    });
+    const totalAmount = items.reduce((s, it) => s + (it.subtotal || 0), 0);
     const id = _nextInvoiceId++;
     const code = `INV-${new Date().getFullYear()}-${String(id).padStart(4, '0')}`;
     const record = {
@@ -1068,25 +1136,43 @@ export const createRetailInvoice = async (payload) => {
       subtotal: totalAmount,
       totalAmount,
       amount: totalAmount,
-      status: payload.markAsPaid ? 'PAID' : 'PENDING',
-      paidAt: payload.markAsPaid ? new Date().toISOString() : null,
+      status: 'PENDING_PAYMENT',
+      paidAt: null,
       createdAt: new Date().toISOString(),
       date: new Date().toISOString().slice(0, 10),
-      paymentMethod: payload.markAsPaid ? payload.method || 'CASH' : null,
+      paymentMethod: null,
+      type: 'RETAIL',
     };
     _invoices.unshift(record);
     return { ...record };
   }
-  const res = await apiClient.post('/admin/invoices', payload);
+  // POST /payments/ with { customerId, cosmeticItems: [{ cosmeticId, quantity }] }
+  const body = {
+    customerId: payload.customerId,
+    cosmeticItems: (payload.cosmeticItems || []).map((it) => ({
+      cosmeticId: it.cosmeticId,
+      quantity: Number(it.quantity || 1),
+    })),
+  };
+  const res = await apiClient.post('/payments/', body);
   return extractObject(res.data);
 };
 
 /**
  * Confirm payment on an invoice.
- * method accepts CASH, BANK_TRANSFER or CARD (case-insensitive on the wire).
+ * method is CASH or BANK_TRANSFER. Card is intentionally NOT supported in
+ * Admin UI; VNPay flow is a payment-gateway concern that the backend records
+ * as BANK_TRANSFER on IPN.
  */
-export const payInvoice = async (id, method, payload = {}) => {
-  if (USE_MOCK) {
+export const payInvoice = async (id, method) => {
+  const safeMethod = String(method || '').toUpperCase();
+  if (safeMethod !== 'CASH' && safeMethod !== 'BANK_TRANSFER') {
+    const err = new Error('Phương thức thanh toán không hợp lệ.');
+    err.response = { status: 400, data: { message: err.message } };
+    throw err;
+  }
+
+  if (USE_MOCK_ADMIN_INVOICES) {
     await _delay(250);
     const inv = _invoices.find((x) => String(x.id) === String(id));
     if (!inv) {
@@ -1095,14 +1181,39 @@ export const payInvoice = async (id, method, payload = {}) => {
       throw err;
     }
     inv.status = 'PAID';
-    inv.paymentMethod = method;
+    inv.paymentMethod = safeMethod;
     inv.paidAt = new Date().toISOString();
     return { ...inv };
   }
-  const res = await apiClient.post(`/admin/invoices/${id}/pay`, {
-    method,
-    ...payload,
+  // PATCH /payments/{id}/confirm-payment with { paymentMethod }
+  const res = await apiClient.patch(`/payments/${id}/confirm-payment`, {
+    paymentMethod: safeMethod,
   });
+  return extractObject(res.data);
+};
+
+/**
+ * Cancel a pending invoice. Backend only allows PENDING_PAYMENT -> CANCELLED.
+ */
+export const cancelInvoice = async (id) => {
+  if (USE_MOCK_ADMIN_INVOICES) {
+    await _delay(220);
+    const inv = _invoices.find((x) => String(x.id) === String(id));
+    if (!inv) {
+      const err = new Error('Không tìm thấy hóa đơn.');
+      err.response = { status: 404 };
+      throw err;
+    }
+    if (inv.status !== 'PENDING_PAYMENT') {
+      const err = new Error('Chỉ hóa đơn chờ thanh toán mới có thể hủy.');
+      err.response = { status: 409, data: { message: err.message } };
+      throw err;
+    }
+    inv.status = 'CANCELLED';
+    inv.paidAt = null;
+    return { ...inv };
+  }
+  const res = await apiClient.patch(`/payments/${id}/cancel`);
   return extractObject(res.data);
 };
 
@@ -1131,10 +1242,9 @@ export const getPaidInvoicesForReport = async (params = {}) => {
       .filter((inv) => inv.status === 'PAID')
       .map((inv) => ({ ...inv, items: (inv.items || []).map((it) => ({ ...it })) }));
   }
-  const list = await safeList(
-    apiClient.get('/admin/invoices', { params: { status: 'PAID', ...params } }),
-  );
-  return Array.isArray(list) ? list : [];
+  // Backend does not filter by ?status=, apply the PAID filter on the client.
+  const list = await safeList(apiClient.get('/payments/', { params }));
+  return (Array.isArray(list) ? list : []).filter((inv) => inv.status === 'PAID');
 };
 
 export const getCustomersForReport = async (params = {}) => {
@@ -1207,6 +1317,7 @@ export default {
   createInvoiceFromAppointment,
   createRetailInvoice,
   payInvoice,
+  cancelInvoice,
   // Reports
   getReportsOverview,
   getPaidInvoicesForReport,
@@ -1216,4 +1327,5 @@ export default {
   extractApiError,
   isDuplicateError,
   isInUseError,
+  isStaleStateError,
 };
