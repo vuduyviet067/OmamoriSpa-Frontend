@@ -66,6 +66,17 @@ const USE_MOCK_ADMIN_CATALOG_COSMETICS =
 // POST /payments/ gets rejected with APPOINTMENT_NOT_EXISTED.
 const USE_MOCK_ADMIN_APPOINTMENTS =
   import.meta.env.VITE_USE_MOCK_ADMIN_APPOINTMENTS === 'true';
+// Dedicated flag so Admin → Báo cáo & Thống kê can hit the real backend
+// reporting endpoints (UC_12) without flipping the global mock flag,
+// which still keeps unrelated admin views on mocks.
+//   GET /payments/admin/revenue?from&to
+//   GET /cosmetics/admin/inventory-report
+//   GET /users/admin/stats?from&to
+//   GET /appointments/admin/stats?from&to
+// The flag is INDEPENDENT from USE_MOCK so a future rollback or A/B test
+// on reporting can flip one without touching anything else.
+const USE_MOCK_ADMIN_REPORTS =
+  import.meta.env.VITE_USE_MOCK_ADMIN_REPORTS === 'true';
 
 // ---- shared helpers (mirrors customerService / therapistService) ------
 const extractList = (payload) => {
@@ -1260,47 +1271,143 @@ export const cancelInvoice = async (id) => {
 // =========================================================
 // Reports & Statistics (UC12)
 // =========================================================
+//
+// Real backend integration (VITE_USE_MOCK_ADMIN_REPORTS=false):
+//   GET /payments/admin/revenue?from=YYYY-MM-DD&to=YYYY-MM-DD
+//     -> { total, serviceAmount, cosmeticAmount,
+//          byDay: [{date,value}], byMonth: [{month,value}],
+//          topCosmetics: [{cosmeticId,name,quantity,revenue}] }
+//   GET /cosmetics/admin/inventory-report
+//     -> { totalStock, lowStockThreshold, lowStockCount,
+//          outOfStockCount, lowStockItems, outOfStockItems }
+//   GET /users/admin/stats?from=YYYY-MM-DD&to=YYYY-MM-DD
+//     -> { totalCustomers, newCustomers }
+//   GET /appointments/admin/stats?from=YYYY-MM-DD&to=YYYY-MM-DD
+//     -> { totalAppointments, completedAppointments }
+//
+// The Reports page MUST NOT fetch raw invoice/customer/appointment lists
+// and recompute statistics - the backend aggregate is the source of truth.
+//
+// All four endpoints accept a `from` / `to` (YYYY-MM-DD) date range EXCEPT
+// the inventory snapshot, which is current state and MUST NOT receive
+// from/to parameters.
 
-export const getReportsOverview = async (params = {}) => {
-  if (USE_MOCK) {
-    await _delay(300);
-    return computeReport(params.from, params.to);
+/**
+ * Revenue aggregate for the active period.
+ * Backend returns PAID-only revenue with service/cosmetic composition and
+ * a daily/monthly trend series plus a top-cosmetics breakdown.
+ */
+export const getAdminRevenueReport = async ({ from, to } = {}) => {
+  if (USE_MOCK_ADMIN_REPORTS) {
+    await _delay(250);
+    return computeReport(from, to);
   }
-  try {
-    const res = await apiClient.get('/admin/reports', { params });
-    return extractObject(res.data) || {};
-  } catch (err) {
-    if (err.response?.status === 404) return {};
-    throw err;
-  }
+  const res = await apiClient.get('/payments/admin/revenue', {
+    params: { from, to },
+  });
+  return extractObject(res.data) || {};
 };
 
-export const getPaidInvoicesForReport = async (params = {}) => {
-  if (USE_MOCK) {
+/**
+ * Current cosmetic inventory snapshot.
+ * The endpoint is intentionally date-less: stock is a present-tense value,
+ * not a historical one. Do NOT pass from/to here.
+ */
+export const getAdminInventoryReport = async () => {
+  if (USE_MOCK_ADMIN_REPORTS) {
+    await _delay(220);
+    const lowStockItems = [];
+    const outOfStockItems = [];
+    let totalStock = 0;
+    let lowStockCount = 0;
+    let outOfStockCount = 0;
+    const lowStockThreshold = 20;
+    _inventorySeed.forEach((row) => {
+      const stock = Number(row.stock || 0);
+      totalStock += stock;
+      if (stock === 0) {
+        outOfStockCount += 1;
+        outOfStockItems.push({
+          id: row.id,
+          name: row.name,
+          stockQuantity: stock,
+        });
+      } else if (stock <= lowStockThreshold) {
+        lowStockCount += 1;
+        lowStockItems.push({
+          id: row.id,
+          name: row.name,
+          stockQuantity: stock,
+        });
+      }
+    });
+    return {
+      totalStock,
+      lowStockThreshold,
+      lowStockCount,
+      outOfStockCount,
+      lowStockItems,
+      outOfStockItems,
+    };
+  }
+  const res = await apiClient.get('/cosmetics/admin/inventory-report');
+  return extractObject(res.data) || {};
+};
+
+/**
+ * Customer aggregate for the active period.
+ * `totalCustomers` is the all-time count; `newCustomers` is the count of
+ * customers registered within [from, to].
+ */
+export const getAdminCustomerStats = async ({ from, to } = {}) => {
+  if (USE_MOCK_ADMIN_REPORTS) {
     await _delay(180);
-    return _invoices
-      .filter((inv) => inv.status === 'PAID')
-      .map((inv) => ({ ...inv, items: (inv.items || []).map((it) => ({ ...it })) }));
+    const fromTs = from ? new Date(`${from}T00:00:00`).getTime() : null;
+    const toTs = to ? new Date(`${to}T23:59:59.999`).getTime() : null;
+    const newCustomers = _customersSeed.filter((c) => {
+      const t = new Date(c.createdAt || c.registeredAt || 0).getTime();
+      if (Number.isNaN(t)) return false;
+      if (fromTs !== null && t < fromTs) return false;
+      if (toTs !== null && t > toTs) return false;
+      return true;
+    }).length;
+    return {
+      totalCustomers: _customersSeed.length,
+      newCustomers,
+    };
   }
-  // Backend does not filter by ?status=, apply the PAID filter on the client.
-  const list = await safeList(apiClient.get('/payments/', { params }));
-  return (Array.isArray(list) ? list : []).filter((inv) => inv.status === 'PAID');
+  const res = await apiClient.get('/users/admin/stats', {
+    params: { from, to },
+  });
+  return extractObject(res.data) || {};
 };
 
-export const getCustomersForReport = async (params = {}) => {
-  if (USE_MOCK) {
-    await _delay(120);
-    return _customers.map((c) => ({ ...c }));
+/**
+ * Appointment aggregate for the active period.
+ * `totalAppointments` counts every appointment in [from, to];
+ * `completedAppointments` is the subset whose status is COMPLETED.
+ */
+export const getAdminAppointmentStats = async ({ from, to } = {}) => {
+  if (USE_MOCK_ADMIN_REPORTS) {
+    await _delay(200);
+    const fromTs = from ? new Date(`${from}T00:00:00`).getTime() : null;
+    const toTs = to ? new Date(`${to}T23:59:59.999`).getTime() : null;
+    const inRange = _appointmentsSeed.filter((a) => {
+      const t = new Date(a.createdAt || a.date || a.startTime || 0).getTime();
+      if (Number.isNaN(t)) return false;
+      if (fromTs !== null && t < fromTs) return false;
+      if (toTs !== null && t > toTs) return false;
+      return true;
+    });
+    return {
+      totalAppointments: inRange.length,
+      completedAppointments: inRange.filter((a) => a.status === 'COMPLETED').length,
+    };
   }
-  return safeList(apiClient.get('/admin/customers', { params }));
-};
-
-export const getAppointmentsForReport = async (params = {}) => {
-  if (USE_MOCK) {
-    await _delay(150);
-    return _appointmentsSeed.map((a) => ({ ...a }));
-  }
-  return safeList(apiClient.get('/admin/appointments', { params }));
+  const res = await apiClient.get('/appointments/admin/stats', {
+    params: { from, to },
+  });
+  return extractObject(res.data) || {};
 };
 
 // =========================================================
@@ -1358,11 +1465,11 @@ export default {
   createRetailInvoice,
   payInvoice,
   cancelInvoice,
-  // Reports
-  getReportsOverview,
-  getPaidInvoicesForReport,
-  getCustomersForReport,
-  getAppointmentsForReport,
+  // Reports (UC12)
+  getAdminRevenueReport,
+  getAdminInventoryReport,
+  getAdminCustomerStats,
+  getAdminAppointmentStats,
   // Helpers
   extractApiError,
   isDuplicateError,
