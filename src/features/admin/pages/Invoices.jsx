@@ -266,6 +266,140 @@ function PaymentConfirmDialog({ target, method, onClose, onConfirm, loading }) {
 }
 
 // =========================================================
+// Invoice type / item-type label helpers (Vietnamese, single source of truth)
+// =========================================================
+const INVOICE_TYPE_LABELS = {
+  appointment: 'Theo lịch hẹn',
+  retail: 'Bán lẻ mỹ phẩm',
+};
+
+const getInvoiceTypeLabel = (invoice) => {
+  if (!invoice) return '-';
+  return invoice.appointmentId
+    ? INVOICE_TYPE_LABELS.appointment
+    : INVOICE_TYPE_LABELS.retail;
+};
+
+const ITEM_TYPE_LABELS = {
+  SERVICE: 'Dịch vụ',
+  ROOM: 'Phòng',
+  COSMETIC: 'Mỹ phẩm',
+};
+
+const getItemTypeLabel = (itemType) => ITEM_TYPE_LABELS[itemType] || itemType || '-';
+
+// =========================================================
+// Printable invoice block.
+// Rendered inside the detail modal so admins can preview it
+// before pressing "In hóa đơn" -> window.print().
+// All fields come from the SAME real `invoice` detail object
+// returned by GET /payments/{id} - no catalog recalculation.
+// =========================================================
+function InvoicePrintArea({ invoice }) {
+  if (!invoice) return null;
+  const statusLabel = getStatusInfo(invoice.status)?.label || '-';
+  const paymentLabel = invoice.paymentMethod
+    ? getPaymentLabel(invoice.paymentMethod)
+    : '-';
+
+  return (
+    <div className="invoice-print-area" aria-hidden="true">
+      <div className="invoice-print-header">
+        <div className="invoice-print-brand">OMAMORI SPA</div>
+        <div className="invoice-print-title">HÓA ĐƠN</div>
+      </div>
+
+      <div className="invoice-print-info">
+        <div className="invoice-print-row">
+          <span>Mã hóa đơn:</span>
+          <strong>{invoice.code || '-'}</strong>
+        </div>
+        <div className="invoice-print-row">
+          <span>Ngày tạo:</span>
+          <strong>{formatDateTime(invoice.createdAt)}</strong>
+        </div>
+        {invoice.paidAt && (
+          <div className="invoice-print-row">
+            <span>Ngày thanh toán:</span>
+            <strong>{formatDateTime(invoice.paidAt)}</strong>
+          </div>
+        )}
+        <div className="invoice-print-row">
+          <span>Trạng thái:</span>
+          <strong>{statusLabel}</strong>
+        </div>
+        <div className="invoice-print-row">
+          <span>Phương thức thanh toán:</span>
+          <strong>{paymentLabel}</strong>
+        </div>
+        <div className="invoice-print-row">
+          <span>Loại hóa đơn:</span>
+          <strong>{getInvoiceTypeLabel(invoice)}</strong>
+        </div>
+        <div className="invoice-print-row">
+          <span>Khách hàng:</span>
+          <strong>
+            {invoice.customerName
+              ? invoice.customerName
+              : invoice.customerId
+                ? `ID khách hàng: ${invoice.customerId}`
+                : '-'}
+          </strong>
+        </div>
+        {invoice.appointmentId && (
+          <div className="invoice-print-row">
+            <span>Mã lịch hẹn:</span>
+            <strong>#{invoice.appointmentId}</strong>
+          </div>
+        )}
+      </div>
+
+      <table className="invoice-print-table">
+        <thead>
+          <tr>
+            <th style={{ width: '6%' }}>STT</th>
+            <th>Nội dung</th>
+            <th style={{ width: '14%' }}>Loại</th>
+            <th style={{ width: '16%' }} className="invoice-print-num">Đơn giá</th>
+            <th style={{ width: '8%' }} className="invoice-print-num">SL</th>
+            <th style={{ width: '18%' }} className="invoice-print-num">Thành tiền</th>
+          </tr>
+        </thead>
+        <tbody>
+          {invoice.items.length === 0 ? (
+            <tr>
+              <td colSpan={6} className="invoice-print-empty">
+                Hóa đơn chưa có dòng sản phẩm nào.
+              </td>
+            </tr>
+          ) : (
+            invoice.items.map((item, idx) => (
+              <tr key={item.id || `${item.itemName}-${idx}`}>
+                <td>{idx + 1}</td>
+                <td>{item.itemName}</td>
+                <td>{getItemTypeLabel(item.itemType)}</td>
+                <td className="invoice-print-num">{formatCurrency(item.unitPrice)}</td>
+                <td className="invoice-print-num">{item.quantity}</td>
+                <td className="invoice-print-num">{formatCurrency(item.subtotal)}</td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+
+      <div className="invoice-print-total">
+        <span>TỔNG CỘNG:</span>
+        <strong>{formatCurrency(invoice.total)}</strong>
+      </div>
+
+      <div className="invoice-print-footer">
+        Cảm ơn quý khách đã sử dụng dịch vụ tại Omamori Spa.
+      </div>
+    </div>
+  );
+}
+
+// =========================================================
 // Invoice detail modal
 // =========================================================
 function InvoiceDetailModal({ isOpen, invoiceId, onClose, onPay }) {
@@ -296,6 +430,12 @@ function InvoiceDetailModal({ isOpen, invoiceId, onClose, onPay }) {
 
   const status = invoice ? getStatusInfo(invoice.status) : null;
   const canPay = invoice && invoice.status === 'PENDING_PAYMENT';
+
+  const handlePrint = () => {
+    if (typeof window !== 'undefined' && typeof window.print === 'function') {
+      window.print();
+    }
+  };
 
   return (
     <Modal
@@ -419,13 +559,20 @@ function InvoiceDetailModal({ isOpen, invoiceId, onClose, onPay }) {
             </div>
           </div>
 
-          {canPay && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
-              <Button onClick={() => onPay(invoice)}>Thanh toán</Button>
+          {invoice && (
+            <div className="invoice-detail-actions no-print" style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+              <Button variant="secondary" onClick={handlePrint}>
+                In hóa đơn
+              </Button>
+              {canPay && (
+                <Button onClick={() => onPay(invoice)}>Thanh toán</Button>
+              )}
             </div>
           )}
         </div>
       )}
+
+      <InvoicePrintArea invoice={invoice} />
     </Modal>
   );
 }
