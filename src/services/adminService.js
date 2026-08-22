@@ -792,24 +792,31 @@ export const getCosmeticsAdmin = async (params = {}) => {
 };
 
 export const createCosmetic = async (payload) => {
-  if (USE_MOCK) {
+  if (USE_MOCK_ADMIN_CATALOG_COSMETICS) {
     await _delay(280);
     const id = _nextCosmeticId++;
     const record = {
       ...payload,
       id,
+      stockQuantity: Number(payload.initialQuantity ?? 0),
+      stock: Number(payload.initialQuantity ?? 0),
       lots: [],
       createdAt: new Date().toISOString(),
     };
     _inventory.unshift(record);
     return { ...record, lots: undefined };
   }
-  const res = await apiClient.post('/admin/cosmetics', payload);
+  // POST /cosmetics/  (collection root requires trailing slash; gateway
+  // stripPrefix=2 strips /api/omamori before forwarding to cosmetic-service,
+  // whose @RequestMapping("/") then matches /cosmetics/ -> /).
+  // Backend expects: name, brand, manufacturer, unit, price, description,
+  // initialQuantity. initialQuantity is CREATE-only.
+  const res = await apiClient.post('/cosmetics/', payload);
   return extractObject(res.data);
 };
 
 export const updateCosmetic = async (id, payload) => {
-  if (USE_MOCK) {
+  if (USE_MOCK_ADMIN_CATALOG_COSMETICS) {
     await _delay(280);
     const idx = _inventory.findIndex((c) => String(c.id) === String(id));
     if (idx < 0) {
@@ -820,18 +827,22 @@ export const updateCosmetic = async (id, payload) => {
     _inventory[idx] = { ..._inventory[idx], ...payload };
     return { ..._inventory[idx], lots: undefined };
   }
-  const res = await apiClient.put(`/admin/cosmetics/${id}`, payload);
+  // PUT /cosmetics/{id} - content-only update. CosmeticUpdateRequest does
+  // NOT include initialQuantity (stock is owned by the dedicated stock-in
+  // flow). Caller must strip it before invoking this.
+  const res = await apiClient.put(`/cosmetics/${id}`, payload);
   return extractObject(res.data);
 };
 
 export const deleteCosmetic = async (id) => {
-  if (USE_MOCK) {
+  if (USE_MOCK_ADMIN_CATALOG_COSMETICS) {
     await _delay(220);
     const idx = _inventory.findIndex((c) => String(c.id) === String(id));
     if (idx >= 0) _inventory.splice(idx, 1);
     return;
   }
-  await apiClient.delete(`/admin/cosmetics/${id}`);
+  // DELETE /cosmetics/{id} - backend soft-deletes (isActive=false).
+  await apiClient.delete(`/cosmetics/${id}`);
 };
 
 // =========================================================

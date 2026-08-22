@@ -22,7 +22,10 @@ import {
 } from '@/services/adminService';
 
 const formatStatus = (item) => {
-  const stock = Number(item.stock ?? item.inventory ?? 0);
+  // Backend (cosmetic-service) returns `stockQuantity` (computed from
+  // CosmeticInventory). Mock seed and older payloads may use `stock` /
+  // `inventory` - check them in order so both work.
+  const stock = Number(item.stockQuantity ?? item.stock ?? item.inventory ?? 0);
   if (item.status) return item.status;
   if (stock <= 0) return 'out_of_stock';
   if (item.minStock !== undefined && stock <= Number(item.minStock)) return 'low_stock';
@@ -64,8 +67,7 @@ function CosmeticForm({ isOpen, mode, initial, onClose, onSaved }) {
     price: '',
     description: '',
     image: '',
-    stock: '',
-    minStock: '',
+    initialQuantity: '',
   });
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -81,11 +83,7 @@ function CosmeticForm({ isOpen, mode, initial, onClose, onSaved }) {
         price: initial.price !== undefined && initial.price !== null ? String(initial.price) : '',
         description: initial.description || initial.note || '',
         image: initial.image || initial.imageUrl || initial.mediaUrl || '',
-        stock: initial.stock !== undefined && initial.stock !== null ? String(initial.stock) : '',
-        minStock:
-          initial.minStock !== undefined && initial.minStock !== null
-            ? String(initial.minStock)
-            : '',
+        initialQuantity: '',
       });
     } else {
       setForm({
@@ -95,8 +93,7 @@ function CosmeticForm({ isOpen, mode, initial, onClose, onSaved }) {
         price: '',
         description: '',
         image: '',
-        stock: '',
-        minStock: '',
+        initialQuantity: '',
       });
     }
     setErrors({});
@@ -119,13 +116,17 @@ function CosmeticForm({ isOpen, mode, initial, onClose, onSaved }) {
     } else if (priceNum < 0) {
       next.price = 'Giá không được âm.';
     }
-    if (form.stock !== '') {
-      const v = Number(form.stock);
-      if (Number.isNaN(v) || v < 0) next.stock = 'Tồn kho không hợp lệ.';
-    }
-    if (form.minStock !== '') {
-      const v = Number(form.minStock);
-      if (Number.isNaN(v) || v < 0) next.minStock = 'Tồn tối thiểu không hợp lệ.';
+    // SoLuongBanDau chi ap dung khi tao moi. CREATE-only - sua my pham
+    // khong cham vao stock (dung flow Nhap kho rieng cho sua stock).
+    if (!isEdit) {
+      if (form.initialQuantity === '') {
+        next.initialQuantity = 'Vui lòng nhập số lượng ban đầu.';
+      } else {
+        const v = Number(form.initialQuantity);
+        if (Number.isNaN(v) || v < 0 || !Number.isInteger(v)) {
+          next.initialQuantity = 'Số lượng ban đầu phải là số nguyên ≥ 0.';
+        }
+      }
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -148,9 +149,12 @@ function CosmeticForm({ isOpen, mode, initial, onClose, onSaved }) {
         image: form.image.trim() || undefined,
         imageUrl: form.image.trim() || undefined,
         mediaUrl: form.image.trim() || undefined,
-        stock: form.stock === '' ? 0 : Number(form.stock),
-        minStock: form.minStock === '' ? undefined : Number(form.minStock),
       };
+      // Chi gui so luong ban dau khi tao moi. Edit khong cham vao stock -
+      // admin can dung flow Nhap kho rieng de dieu chinh ton kho sau.
+      if (!isEdit) {
+        payload.initialQuantity = Number(form.initialQuantity);
+      }
       let saved;
       if (isEdit && initial?.id) {
         saved = await updateCosmetic(initial.id, payload);
@@ -218,28 +222,21 @@ function CosmeticForm({ isOpen, mode, initial, onClose, onSaved }) {
           error={errors.price}
           required
         />
-        <div className="admin-form-row">
+        {!isEdit && (
           <Input
-            label="Tồn kho"
+            label="Số lượng ban đầu"
             type="number"
             inputMode="numeric"
             min="0"
-            value={form.stock}
-            onChange={handleChange('stock')}
-            error={errors.stock}
+            step="1"
+            value={form.initialQuantity}
+            onChange={handleChange('initialQuantity')}
+            error={errors.initialQuantity}
             placeholder="0"
+            required
+            helper="Số lượng tồn kho ban đầu. Sau khi tạo, dùng chức năng Nhập kho để bổ sung thêm lô."
           />
-          <Input
-            label="Tồn tối thiểu (cảnh báo)"
-            type="number"
-            inputMode="numeric"
-            min="0"
-            value={form.minStock}
-            onChange={handleChange('minStock')}
-            error={errors.minStock}
-            placeholder="0"
-          />
-        </div>
+        )}
         <Input
           label="URL hình ảnh"
           value={form.image}
@@ -445,7 +442,7 @@ function AdminCatalogCosmetics() {
                       <td>{formatCurrency(item.price)}</td>
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                          <span>{item.stock ?? 0}</span>
+                          <span>{item.stockQuantity ?? item.stock ?? 0}</span>
                           <StatusBadge status={stockVariant(status)}>
                             {stockLabel(status)}
                           </StatusBadge>
@@ -499,7 +496,7 @@ function AdminCatalogCosmetics() {
                     </div>
                     <div className="admin-table-card-row-meta">
                       <span>Giá: {formatCurrency(item.price)}</span>
-                      <span>Tồn kho: {item.stock ?? 0}</span>
+                      <span>Tồn kho: {item.stockQuantity ?? item.stock ?? 0}</span>
                     </div>
                     <div className="admin-table-card-row-actions">
                       <button

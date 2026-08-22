@@ -260,7 +260,7 @@ function AdminDashboard() {
                       </div>
                     </div>
                     <div className="admin-list-row-meta">
-                      Tồn: <strong>{item.stock ?? '-'}</strong>
+                      Tồn: <strong>{item.stockQuantity ?? item.stock ?? '-'}</strong>
                       {item.minStock !== undefined && ` / tối thiểu ${item.minStock}`}
                     </div>
                   </div>

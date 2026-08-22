@@ -706,7 +706,16 @@ function RetailInvoiceModal({ isOpen, onClose, onCreated }) {
   const addLine = (cosmetic) => {
     const id = cosmetic.id ?? cosmetic._id;
     if (!id) return;
-    const stock = pickNumber(cosmetic.stock, cosmetic.quantity, 0) ?? 0;
+    // Backend (cosmetic-service) returns `stockQuantity` (computed live from
+    // CosmeticInventory - xem CosmeticResponse). Mock seed and other callers
+    // may use `stock` / `quantity`. Pick the first available so picker hien
+    // thi dung so luong that su.
+    const stock = pickNumber(
+      cosmetic.stockQuantity,
+      cosmetic.stock,
+      cosmetic.quantity,
+      0,
+    ) ?? 0;
     setLines((prev) => {
       const existing = prev.find((l) => l.cosmeticId === id);
       if (existing) {
@@ -825,7 +834,12 @@ function RetailInvoiceModal({ isOpen, onClose, onCreated }) {
             <div className="admin-pick-list">
               {filteredCosmetics.slice(0, 50).map((c) => {
                 const id = c.id ?? c._id;
-                const stock = pickNumber(c.stock, c.quantity, 0) ?? 0;
+                const stock = pickNumber(
+                  c.stockQuantity,
+                  c.stock,
+                  c.quantity,
+                  0,
+                ) ?? 0;
                 const line = lines.find((l) => l.cosmeticId === id);
                 return (
                   <button
