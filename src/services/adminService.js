@@ -3,7 +3,7 @@
 //   - /admin/dashboard (overview)
 //   - /admin/customers (UC09)
 //   - /admin/therapists (UC09 - incl. create/update)
-//   - /rooms/, /admin/rooms, /admin/cosmetics (UC10)
+//   - /rooms/, /cosmetics/, /admin/rooms (UC10)
 //   - /treatments/ (P2-B1: Admin Catalog - Services via treatment-service)
 //   - /admin/inventory (UC10/UC11)
 //   - /admin/invoices, /admin/invoices/pay (UC11)
@@ -52,6 +52,20 @@ const USE_MOCK_ADMIN_CATALOG_ROOMS =
 // payment-service backend without flipping the global mock flag.
 const USE_MOCK_ADMIN_INVOICES =
   import.meta.env.VITE_USE_MOCK_ADMIN_INVOICES === 'true';
+// Dedicated flag so the cosmetic picker inside Admin → Hóa đơn & thanh
+// toán → Bán lẻ mỹ phẩm hits the real cosmetic-service /cosmetics/
+// backend. Without this, retail-invoice creation is fed from the global
+// mock inventory which uses numeric ids (e.g. 1, 2) and the resulting
+// POST /payments/ gets rejected with COSMETIC_NOT_EXISTED.
+const USE_MOCK_ADMIN_CATALOG_COSMETICS =
+  import.meta.env.VITE_USE_MOCK_ADMIN_CATALOG_COSMETICS === 'true';
+// Dedicated flag so the appointment picker inside Admin → Hóa đơn & thanh
+// toán → Từ lịch hẹn hits the real appointment-service /appointments/
+// backend (ADMIN-protected, optional ?status= filter). Without this, the
+// picker is fed from the global mock seed (numeric ids like 505) and
+// POST /payments/ gets rejected with APPOINTMENT_NOT_EXISTED.
+const USE_MOCK_ADMIN_APPOINTMENTS =
+  import.meta.env.VITE_USE_MOCK_ADMIN_APPOINTMENTS === 'true';
 
 // ---- shared helpers (mirrors customerService / therapistService) ------
 const extractList = (payload) => {
@@ -759,7 +773,7 @@ export const deleteRoom = async (id) => {
 let _nextCosmeticId = 1000;
 
 export const getCosmeticsAdmin = async (params = {}) => {
-  if (USE_MOCK) {
+  if (USE_MOCK_ADMIN_CATALOG_COSMETICS) {
     await _delay(200);
     const { q = '' } = params || {};
     const term = String(q || '').toLowerCase().trim();
@@ -771,7 +785,10 @@ export const getCosmeticsAdmin = async (params = {}) => {
       )
       .map((c) => ({ ...c, lots: undefined }));
   }
-  return safeList(apiClient.get('/admin/cosmetics', { params }));
+  // GET /cosmetics/  (collection root requires trailing slash; gateway
+  // stripPrefix=2 strips /api/omamori before forwarding to cosmetic-service).
+  // Backend ids are UUID strings; forwarded verbatim to /payments/.
+  return safeList(apiClient.get('/cosmetics/', { params }));
 };
 
 export const createCosmetic = async (payload) => {
@@ -823,10 +840,13 @@ export const deleteCosmetic = async (id) => {
 
 /**
  * List appointments for the admin to pick a completed one when creating an
- * invoice (Flow 1). Backend may scope to completed only via ?status=COMPLETED.
+ * invoice (Flow 1). Backend (ADMIN) exposes:
+ *   GET /appointments/?status=COMPLETED
+ * Backend only honours `status`; any other query (e.g. free-text `q`) is
+ * applied client-side so the picker UX still has search.
  */
 export const getAdminAppointments = async (params = {}) => {
-  if (USE_MOCK) {
+  if (USE_MOCK_ADMIN_APPOINTMENTS) {
     await _delay(200);
     const { status, q } = params || {};
     return _appointmentsSeed
@@ -837,18 +857,27 @@ export const getAdminAppointments = async (params = {}) => {
       )
       .map((a) => ({ ...a }));
   }
-  return safeList(apiClient.get('/admin/appointments', { params }));
+  const { status, q } = params || {};
+  const wireParams = {};
+  if (status) wireParams.status = status;
+  const list = await safeList(apiClient.get('/appointments/', { params: wireParams }));
+  if (!q) return list;
+  const term = String(q).toLowerCase();
+  return list.filter((a) =>
+    (a.code || '').toLowerCase().includes(term)
+    || (a.customerName || '').toLowerCase().includes(term)
+  );
 };
 
 export const getAdminAppointmentById = async (id) => {
-  if (USE_MOCK) {
+  if (USE_MOCK_ADMIN_APPOINTMENTS) {
     await _delay(120);
     const a = _appointmentsSeed.find((x) => String(x.id) === String(id));
     return a ? { ...a } : null;
   }
   if (!id) return null;
   try {
-    const res = await apiClient.get(`/admin/appointments/${id}`);
+    const res = await apiClient.get(`/appointments/${id}`);
     return extractObject(res.data);
   } catch (err) {
     if (err.response?.status === 404) return null;
