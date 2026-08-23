@@ -178,9 +178,11 @@ function TherapistAppointmentDetail() {
   const isTerminal = appointment.status === APPOINTMENT_STATUS.COMPLETED
     || appointment.status === APPOINTMENT_STATUS.CANCELLED;
   const noteText = appointment.notes || appointment.note || appointment.customerNote || null;
-  const showTreatmentLink =
+  const canOpenTreatment =
     appointment.status === APPOINTMENT_STATUS.IN_PROGRESS
-    || appointment.status === APPOINTMENT_STATUS.COMPLETED;
+    || appointment.status === APPOINTMENT_STATUS.COMPLETED
+    || appointment.status === APPOINTMENT_STATUS.PENDING
+    || appointment.status === APPOINTMENT_STATUS.CONFIRMED;
 
   const isInProgress =
     appointment.status === APPOINTMENT_STATUS.IN_PROGRESS;
@@ -191,7 +193,7 @@ function TherapistAppointmentDetail() {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
           <path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        Quay lại lịch làm việc
+        Quay lại Điều trị &amp; kê đơn
       </Link>
 
       {flash.message && (
@@ -324,13 +326,15 @@ function TherapistAppointmentDetail() {
           )}
         </div>
 
-        {showTreatmentLink && (
+        {canOpenTreatment && (
           <div className="therapist-appointment-actions">
             <Link to={`/therapist/treatments/${appointment.id}`}>
               <Button>
                 {appointment.status === APPOINTMENT_STATUS.COMPLETED
                   ? 'Xem nhật ký trị liệu'
-                  : 'Mở hồ sơ trị liệu'}
+                  : appointment.status === APPOINTMENT_STATUS.IN_PROGRESS
+                    ? 'Mở hồ sơ trị liệu'
+                    : 'Xem chi tiết ca'}
               </Button>
             </Link>
           </div>
@@ -363,7 +367,7 @@ function TherapistAppointmentDetail() {
 
       <div className="therapist-appointment-footer">
         <Button variant="ghost" onClick={() => navigate('/therapist/schedule')}>
-          Về lịch làm việc
+          Về Điều trị &amp; kê đơn
         </Button>
       </div>
     </div>

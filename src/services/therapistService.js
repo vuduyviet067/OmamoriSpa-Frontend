@@ -308,26 +308,54 @@ export const updateAppointmentStatus = async (appointmentId, status) => {
 };
 
 // ─── GET CUSTOMER TREATMENT HISTORY ───────────────────────────────────────────
-
+// Real backend endpoint: GET /appointments/therapist/me/therapy-records/customer/{customerId}
+// Returns records scoped to the calling therapist's appointments. Empty list is valid.
 export const getCustomerTreatmentHistory = async (customerId, params = {}) => {
   if (!customerId) return [];
   if (USE_MOCK) {
     await _delay(200);
     return _mockHistory.filter((h) => String(h.customerId) === String(customerId));
   }
-  const response = await apiClient.get(`/therapists/customers/${customerId}/treatments`, { params });
+  const response = await apiClient.get(
+    `/appointments/therapist/me/therapy-records/customer/${encodeURIComponent(customerId)}`,
+    { params }
+  );
   return extractList(response.data);
 };
 
 // ─── GET PRESCRIBABLE COSMETICS ───────────────────────────────────────────────
-
+// Real backend: GET /cosmetics/  (public catalog). Returns Cosmetic list with
+// stockQuantity + isActive. Therapist-only filter for active items is applied
+// in the UI layer.
 export const getPrescribableCosmetics = async (params = {}) => {
   if (USE_MOCK) {
     await _delay(200);
     return therapistMock.cosmetics || [];
   }
-  const response = await apiClient.get('/therapists/cosmetics', { params });
+  const response = await apiClient.get('/cosmetics/', { params });
   return extractList(response.data);
+};
+
+// ─── SAVE PRESCRIPTION (DonMyPham) ────────────────────────────────────────────
+// Real backend: POST /cosmetics/cosmetic-orders
+// Body: { appointmentId, technicianId, note, items: [{ cosmeticId, quantity, usageInstruction }] }
+// Backend checks stock availability but does NOT decrement stock — that
+// happens at invoice/paid time. Unique-per-appointment constraint on backend.
+export const savePrescription = async (payload) => {
+  if (USE_MOCK) {
+    await _delay(300);
+    return { ...payload, id: _mockNextId++, createdAt: new Date().toISOString() };
+  }
+  const response = await apiClient.post('/cosmetics/cosmetic-orders', payload);
+  return extractObject(response.data);
+};
+
+// ─── GET PRESCRIPTION BY APPOINTMENT ──────────────────────────────────────────
+export const getPrescriptionByAppointment = async (appointmentId) => {
+  const response = await apiClient.get(
+    `/cosmetics/cosmetic-orders/appointment/${encodeURIComponent(appointmentId)}`
+  );
+  return extractObject(response.data);
 };
 
 // ─── SAVE TREATMENT JOURNAL ───────────────────────────────────────────────────
