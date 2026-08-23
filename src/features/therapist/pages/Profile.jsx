@@ -5,7 +5,6 @@ import { getMyProfile, updateMyProfile } from '@/services/therapistService';
 import { Button, Input, LoadingState } from '@/components/common';
 import useFlashMessage from '@/hooks/useFlashMessage';
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_REGEX = /^(0[0-9]{9})$/;
 
 const getInitials = (name) => {
@@ -31,13 +30,18 @@ function TherapistProfile() {
 
   const [original, setOriginal] = useState({
     name: '',
-    email: '',
     phone: '',
+  });
+
+  const [profileMeta, setProfileMeta] = useState({
+    dateOfBirth: null,
+    gender: null,
+    address: '',
+    avatarUrl: null,
   });
 
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
     phone: '',
   });
 
@@ -51,11 +55,19 @@ function TherapistProfile() {
     setError(null);
     try {
       const data = await getMyProfile();
+
       const next = {
-        name: data?.name ?? user?.name ?? '',
-        email: data?.email ?? user?.email ?? '',
+        name: data?.fullName ?? data?.name ?? user?.name ?? '',
         phone: data?.phone ?? user?.phone ?? '',
       };
+
+      setProfileMeta({
+        dateOfBirth: data?.dateOfBirth ?? null,
+        gender: data?.gender ?? null,
+        address: data?.address ?? '',
+        avatarUrl: data?.avatarUrl ?? null,
+      });
+
       setOriginal(next);
       setFormData(next);
     } catch (err) {
@@ -67,7 +79,6 @@ function TherapistProfile() {
       );
       const fallback = {
         name: user?.name || '',
-        email: user?.email || '',
         phone: user?.phone || '',
       };
       setOriginal(fallback);
@@ -77,11 +88,10 @@ function TherapistProfile() {
     }
   };
 
-  const isDirty = useMemo(() => (
-    formData.name !== original.name
-    || formData.email !== original.email
-    || formData.phone !== original.phone
-  ), [formData, original]);
+  const isDirty = useMemo(
+    () => formData.phone !== original.phone,
+    [formData.phone, original.phone]
+  );
 
   const handleChange = (field) => (e) => {
     const value = e.target.value;
@@ -93,16 +103,6 @@ function TherapistProfile() {
 
   const validate = () => {
     const newErrors = {};
-    if (!formData.name.trim()) {
-      newErrors.name = 'Vui lòng nhập họ và tên';
-    } else if (formData.name.trim().length < 2) {
-      newErrors.name = 'Họ và tên phải có ít nhất 2 ký tự';
-    }
-    if (!formData.email.trim()) {
-      newErrors.email = 'Vui lòng nhập email';
-    } else if (!EMAIL_REGEX.test(formData.email.trim())) {
-      newErrors.email = 'Email không đúng định dạng';
-    }
     if (!formData.phone.trim()) {
       newErrors.phone = 'Vui lòng nhập số điện thoại';
     } else if (!PHONE_REGEX.test(formData.phone.replace(/\s/g, ''))) {
@@ -119,6 +119,12 @@ function TherapistProfile() {
     setIsEditing(false);
   };
 
+  const handleEdit = () => {
+    setIsEditing(true);
+    setErrors({});
+    setError(null);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -126,22 +132,44 @@ function TherapistProfile() {
     if (!isDirty) return;
     setSaving(true);
     try {
+      if (!profileMeta.dateOfBirth) {
+        setError(
+          'Hồ sơ hiện chưa có ngày sinh nên chưa thể cập nhật. Vui lòng liên hệ quản trị viên.'
+        );
+        setSaving(false);
+        return;
+      }
+
       const payload = {
-        name: formData.name.trim(),
-        email: formData.email.trim(),
+        dateOfBirth: profileMeta.dateOfBirth,
+        gender: profileMeta.gender,
         phone: formData.phone.replace(/\s/g, ''),
+        address: profileMeta.address ?? '',
+        avatarUrl: profileMeta.avatarUrl,
       };
       const updated = await updateMyProfile(payload);
+
       const updatedFields = {
-        name: updated?.name ?? payload.name,
-        email: updated?.email ?? payload.email,
+        name: updated?.fullName ?? updated?.name ?? original.name,
         phone: updated?.phone ?? payload.phone,
       };
+
+      setProfileMeta({
+        dateOfBirth: updated?.dateOfBirth ?? profileMeta.dateOfBirth,
+        gender: updated?.gender ?? profileMeta.gender,
+        address: updated?.address ?? profileMeta.address,
+        avatarUrl: updated?.avatarUrl ?? profileMeta.avatarUrl,
+      });
+
       setOriginal(updatedFields);
       setFormData(updatedFields);
+
       if (typeof updateUser === 'function') {
-        updateUser(updatedFields);
+        updateUser({
+          phone: updatedFields.phone,
+        });
       }
+
       flash.show('Cập nhật hồ sơ thành công.');
       setIsEditing(false);
     } catch (err) {
@@ -224,7 +252,7 @@ function TherapistProfile() {
               </div>
               <div className="therapist-profile-view-row">
                 <span className="therapist-profile-view-label">Email</span>
-                <span className="therapist-profile-view-value">{original.email || '—'}</span>
+                <span className="therapist-profile-view-value">{user?.email || '—'}</span>
               </div>
               <div className="therapist-profile-view-row">
                 <span className="therapist-profile-view-label">Số điện thoại</span>
@@ -232,7 +260,7 @@ function TherapistProfile() {
               </div>
             </div>
             <div className="therapist-profile-view-actions">
-              <Button onClick={() => setIsEditing(true)}>
+              <Button onClick={handleEdit}>
                 Chỉnh sửa
               </Button>
             </div>
@@ -248,19 +276,17 @@ function TherapistProfile() {
                   value={formData.name}
                   onChange={handleChange('name')}
                   placeholder="Nhập họ và tên"
-                  error={errors.name}
-                  autoComplete="name"
+                  disabled
+                  readOnly
                 />
               </div>
               <div className="input-group">
                 <Input
                   label="Email"
                   type="email"
-                  value={formData.email}
-                  onChange={handleChange('email')}
-                  placeholder="email@example.com"
-                  error={errors.email}
-                  autoComplete="email"
+                  value={user?.email || ''}
+                  disabled
+                  readOnly
                 />
               </div>
               <div className="input-group">

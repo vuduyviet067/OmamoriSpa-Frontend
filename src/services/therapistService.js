@@ -383,8 +383,12 @@ export const getMyProfile = async () => {
     await _delay(150);
     return { ...therapistMock.profile };
   }
-  const response = await apiClient.get('/therapists/profile');
-  return extractObject(response.data);
+  const response = await apiClient.get('/profiles/me');
+  const profile = response.data?.result ?? response.data;
+  return {
+    ...profile,
+    name: profile?.fullName ?? '',
+  };
 };
 
 // ─── UPDATE MY PROFILE ───────────────────────────────────────────────────────
@@ -395,8 +399,12 @@ export const updateMyProfile = async (payload) => {
     Object.assign(therapistMock.profile, payload);
     return { ...therapistMock.profile };
   }
-  const response = await apiClient.put('/therapists/profile', payload);
-  return extractObject(response.data);
+  const response = await apiClient.put('/profiles/me', payload);
+  const profile = response.data?.result ?? response.data;
+  return {
+    ...profile,
+    name: profile?.fullName ?? '',
+  };
 };
 
 /**
