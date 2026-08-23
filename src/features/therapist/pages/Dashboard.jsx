@@ -155,7 +155,7 @@ function TherapistDashboard() {
         <h1>Xin chào, {user?.name || 'Kỹ thuật viên'}</h1>
         <p className="therapist-greeting-date">{todayLabel}</p>
         <p className="therapist-greeting-sub">
-          Lịch làm việc của bạn hôm nay.
+          Lịch trị liệu của bạn hôm nay.
         </p>
       </section>
 
@@ -224,7 +224,7 @@ function TherapistDashboard() {
         <div className="customer-section-header">
           <h2 className="customer-section-title">Lịch hôm nay</h2>
           <Link to="/therapist/schedule" className="customer-section-link">
-            Xem lịch làm việc
+            Xem Điều trị &amp; kê đơn
           </Link>
         </div>
 

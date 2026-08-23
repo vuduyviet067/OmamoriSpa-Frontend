@@ -68,9 +68,22 @@ function AppointmentRow({ appointment }) {
   const statusVariant = APPOINTMENT_STATUS_VARIANTS[appointment.status] || 'neutral';
   const statusLabel = APPOINTMENT_STATUS_LABELS[appointment.status] || appointment.status;
 
+  // For appointments that allow treatment work, link straight into the
+  // treatment workspace (UC_08 "Điều trị & kê đơn") instead of the
+  // appointment detail page. CANCELLED is excluded.
+  const canTreat =
+    appointment.status === APPOINTMENT_STATUS.PENDING
+    || appointment.status === APPOINTMENT_STATUS.CONFIRMED
+    || appointment.status === APPOINTMENT_STATUS.IN_PROGRESS
+    || appointment.status === APPOINTMENT_STATUS.COMPLETED;
+
+  const target = canTreat
+    ? `/therapist/treatments/${appointment.id}`
+    : `/therapist/appointments/${appointment.id}`;
+
   return (
     <Link
-      to={`/therapist/appointments/${appointment.id}`}
+      to={target}
       className={`therapist-schedule-row ${
         appointment.status === APPOINTMENT_STATUS.IN_PROGRESS ? 'is-live' : ''
       } ${appointment.status === APPOINTMENT_STATUS.COMPLETED ? 'is-past' : ''}`}
@@ -184,8 +197,8 @@ function TherapistSchedule() {
       )}
 
       <div className="therapist-page-header">
-        <h1>Lịch làm việc</h1>
-        <p>Xem các ca trị liệu được phân công cho bạn.</p>
+        <h1>Điều trị &amp; kê đơn</h1>
+        <p>Các ca trị liệu được phân công cho bạn. Chọn ca để mở hồ sơ trị liệu và kê đơn mỹ phẩm.</p>
       </div>
 
       <div className="therapist-tabs" role="tablist">
