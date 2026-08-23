@@ -1,22 +1,23 @@
 // Shared cosmetic image resolver.
 //
 // Why this exists:
-// The backend `cosmetic-service` does NOT expose an image/imageUrl field,
-// and per the project contract we must NOT add one to the DB or the API.
-// Real local assets exist under `public/images/spa/cosmetics/`
-// (see `public/images/spa/README.md` for the canonical asset manifest).
+// The cosmetic-service now persists an OPTIONAL `imageUrl` on each cosmetic
+// (VARCHAR(500), nullable). Admin can enter either an absolute http(s) URL or
+// an in-system web path such as "/images/spa/cosmetics/cosmetic-07.jpg".
+// The frontend still owns the deterministic UUID -> local asset map for the
+// stable seed cosmetics, so missing/empty imageUrl falls back to that map
+// before reaching the placeholder.
 //
 // Resolution order:
-//   1. Whatever the backend / caller supplied on the record (image,
-//      imageUrl, mediaUrl) wins first.
-//   2. Otherwise, look the cosmetic's id up in COSMETIC_IMAGE_BY_ID below.
-//   3. Otherwise, fall back to DEFAULT_COSMETIC_IMAGE.
+//   1. cosmetic.imageUrl  — what admin actually saved through the modal.
+//   2. cosmetic.image     — legacy / mock data field, kept for back-compat.
+//   3. Lookup of cosmetic.id in COSMETIC_IMAGE_BY_ID — stable seed UUIDs.
+//   4. DEFAULT_COSMETIC_IMAGE — generic placeholder.
 //
-// Mappings below are derived from the project README manifest
-// (`public/images/spa/README.md`) cross-referenced with the canonical seed
+// Mappings below are derived from the canonical seed
 // (`SpaOmamori/seed_phase2_catalog.sql`). Only the canonical seed UUIDs are
-// listed; any admin/test/duplicate records fall through to the
-// placeholder.
+// listed; any admin/test/duplicate records without imageUrl fall through to
+// the placeholder.
 
 export const DEFAULT_COSMETIC_IMAGE = '/images/spa/source/cosmetic-default.webp';
 
@@ -37,15 +38,24 @@ export const COSMETIC_IMAGE_BY_ID = Object.freeze({
   '22222222-2222-4222-8222-222222222206': '/images/spa/cosmetics/cosmetic-06.jpg',
 });
 
+// Returns true when the candidate looks like a real, renderable path/URL.
+// Filters out empty strings, whitespace, and obviously bad values that the
+// backend may echo back when the field was explicitly cleared.
+function isUsableImage(candidate) {
+  if (typeof candidate !== 'string') return false;
+  const trimmed = candidate.trim();
+  if (!trimmed) return false;
+  return true;
+}
+
 /**
  * Resolve the image to render for a cosmetic record.
  *
  * Resolution order:
- *   1. `cosmetic.image`     (preferred)
- *   2. `cosmetic.imageUrl`
- *   3. `cosmetic.mediaUrl`
- *   4. Lookup of `cosmetic.id` in COSMETIC_IMAGE_BY_ID.
- *   5. DEFAULT_COSMETIC_IMAGE placeholder.
+ *   1. `cosmetic.imageUrl` — persisted value from Admin edit.
+ *   2. `cosmetic.image`    — legacy / mock payload field.
+ *   3. Lookup of `cosmetic.id` in COSMETIC_IMAGE_BY_ID (stable seed UUIDs).
+ *   4. DEFAULT_COSMETIC_IMAGE placeholder.
  *
  * Passing `null`/`undefined` yields the placeholder as well.
  *
@@ -55,11 +65,8 @@ export const COSMETIC_IMAGE_BY_ID = Object.freeze({
 export function resolveCosmeticImage(cosmetic) {
   if (!cosmetic) return DEFAULT_COSMETIC_IMAGE;
 
-  const explicit =
-    cosmetic.image ||
-    cosmetic.imageUrl ||
-    cosmetic.mediaUrl;
-  if (explicit) return explicit;
+  if (isUsableImage(cosmetic.imageUrl)) return cosmetic.imageUrl.trim();
+  if (isUsableImage(cosmetic.image)) return cosmetic.image.trim();
 
   const byId = COSMETIC_IMAGE_BY_ID[String(cosmetic.id)];
   if (byId) return byId;

@@ -83,7 +83,7 @@ function CosmeticForm({ isOpen, mode, initial, onClose, onSaved }) {
         manufacturer: initial.manufacturer || initial.madeBy || '',
         price: initial.price !== undefined && initial.price !== null ? String(initial.price) : '',
         description: initial.description || initial.note || '',
-        image: initial.image || initial.imageUrl || initial.mediaUrl || '',
+        image: initial.imageUrl || initial.image || '',
         initialQuantity: '',
       });
     } else {
@@ -146,10 +146,11 @@ function CosmeticForm({ isOpen, mode, initial, onClose, onSaved }) {
         manufacturer: form.manufacturer.trim() || undefined,
         price: Number(form.price),
         description: form.description.trim() || undefined,
-        // image: send multiple keys so backend can pick whichever it understands
-        image: form.image.trim() || undefined,
+        // P2-B4: backend now has a real imageUrl field. Send only that key.
+        // Empty string clears the persisted path (resolver then falls back to
+        // seed UUID map or placeholder). Undefined leaves it unchanged (via
+        // MapStruct NullValuePropertyMappingStrategy.IGNORE on update).
         imageUrl: form.image.trim() || undefined,
-        mediaUrl: form.image.trim() || undefined,
       };
       // Chi gui so luong ban dau khi tao moi. Edit khong cham vao stock -
       // admin can dung flow Nhap kho rieng de dieu chinh ton kho sau.
@@ -242,8 +243,8 @@ function CosmeticForm({ isOpen, mode, initial, onClose, onSaved }) {
           label="URL hình ảnh"
           value={form.image}
           onChange={handleChange('image')}
-          placeholder="https://..."
-          helper="Hệ thống sẽ dùng URL này nếu Media Service hỗ trợ"
+          placeholder="/images/spa/cosmetics/cosmetic-07.jpg"
+          helper="Nhập đường dẫn ảnh trong hệ thống, ví dụ /images/spa/cosmetics/cosmetic-07.jpg"
         />
         {form.image && (
           <div className="admin-image-preview">
