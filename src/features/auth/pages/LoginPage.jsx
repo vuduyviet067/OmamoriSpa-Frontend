@@ -184,24 +184,6 @@ function LoginPage() {
                 </Link>
               </p>
             </div>
-
-            <div className="auth-demo-accounts">
-              <p className="demo-title">Tài khoản demo để thử nghiệm:</p>
-              <div className="demo-accounts">
-                <div className="demo-account">
-                  <span className="demo-role">Khách hàng:</span>
-                  <code>khachhang@email.com</code> / <code>Customer123</code>
-                </div>
-                <div className="demo-account">
-                  <span className="demo-role">Kỹ thuật viên:</span>
-                  <code>kythuatvien@email.com</code> / <code>Therapist123</code>
-                </div>
-                <div className="demo-account">
-                  <span className="demo-role">Quản trị viên:</span>
-                  <code>quantrivien@email.com</code> / <code>Admin123</code>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>
