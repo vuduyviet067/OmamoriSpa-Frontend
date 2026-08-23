@@ -299,7 +299,7 @@
   margin-bottom: var(--space-2);
 }
 
-/* Top-level "Danh mục" group button */
+/* Top-level "Quản lý danh mục" group button */
 .sidebar-nav-group {
   display: flex;
   align-items: center;
@@ -359,10 +359,6 @@
   margin-bottom: var(--space-3);
 }
 
-.sidebar-nav-sub-flyout {
-  display: none;
-}
-
 .sidebar-nav-item {
   position: relative;
 }
@@ -381,11 +377,19 @@
   font-size: var(--text-sm);
 }
 
-.admin-layout--collapsed .sidebar-nav-sub-flyout {
-  display: none;
+/* Admin accent override on the active sub-item so the catalog
+   highlight matches the rest of the admin chrome (error red), not
+   the global green used by customer/therapist. */
+.admin-layout .sidebar-nav-item.active {
+  background-color: var(--admin-accent-soft);
+  color: var(--admin-accent);
+}
+.admin-layout .sidebar-nav-item.active:hover {
+  background-color: var(--admin-accent-soft);
+  color: var(--admin-accent);
 }
 
-/* Collapsed desktop sidebar - show the icon only; sub flyouts: popover */
+/* Collapsed desktop sidebar - show the icon only */
 .admin-layout--collapsed .sidebar-nav-group {
   justify-content: center;
   padding: var(--space-3);

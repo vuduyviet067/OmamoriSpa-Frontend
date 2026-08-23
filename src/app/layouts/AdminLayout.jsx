@@ -7,9 +7,9 @@ import { getInitials } from '@/utils/formatters';
 // Layout / chrome styles are loaded globally from app/layouts/admin.css.
 
 // Top-level groups matching the spec:
-//   Tổng quan | Người dùng & Nhân sự | Danh mục | Kho mỹ phẩm |
+//   Tổng quan | Người dùng & Nhân sự | Quản lý danh mục | Kho mỹ phẩm |
 //   Hóa đơn & Thanh toán | Báo cáo & Thống kê
-// `Danh mục` is a collapsible parent with the 3 child routes.
+// `Quản lý danh mục` is a collapsible parent with the 3 child routes.
 const navGroups = [
   {
     key: 'overview',
@@ -27,7 +27,7 @@ const navGroups = [
   },
   {
     key: 'catalog',
-    label: 'Danh mục',
+    label: 'Quản lý danh mục',
     collapsible: true,
     icon: 'folder',
     items: [
@@ -289,6 +289,18 @@ function AdminLayout() {
             // Top-level single item or collapsible parent of catalog.
             const groupActive = group.items.some((it) => isActive(it.path, it.exact));
             if (group.collapsible) {
+              const handleCatalogClick = () => {
+                // When the sidebar is collapsed on desktop, clicking the
+                // parent group must auto-expand it so the submenu becomes
+                // visible and reachable. Otherwise users have no way to
+                // navigate to catalog children from a collapsed sidebar.
+                if (collapsed) {
+                  persistCollapsed(false);
+                  setCatalogOpen(true);
+                } else {
+                  setCatalogOpen((v) => !v);
+                }
+              };
               return (
                 <div key={group.key} className="sidebar-nav-section">
                   <button
@@ -298,8 +310,8 @@ function AdminLayout() {
                       groupActive && 'sidebar-nav-group--active',
                       isCollapsed && 'sidebar-nav-group--collapsed',
                     )}
-                    onClick={() => setCatalogOpen((v) => !v)}
-                    aria-expanded={catalogOpen}
+                    onClick={handleCatalogClick}
+                    aria-expanded={!isCollapsed ? catalogOpen : !collapsed}
                     aria-controls="sidebar-nav-catalog"
                     title={isCollapsed ? group.label : undefined}
                   >
@@ -327,26 +339,6 @@ function AdminLayout() {
                         >
                           <span className="sidebar-nav-item-icon">{ICONS[item.icon]}</span>
                           {item.label}
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                  {/* Collapsed mode: show sub items as a flyout on hover/active */}
-                  {isCollapsed && (
-                    <div className="sidebar-nav-sub-flyout">
-                      {group.items.map((item) => (
-                        <Link
-                          key={item.path}
-                          to={item.path}
-                          className={clsx(
-                            'sidebar-nav-item sidebar-nav-item--sub',
-                            isActive(item.path) && 'active',
-                          )}
-                          onClick={() => setSidebarOpen(false)}
-                          title={item.label}
-                        >
-                          <span className="sidebar-nav-item-icon">{ICONS[item.icon]}</span>
-                          <span className="sidebar-nav-item-label">{item.label}</span>
                         </Link>
                       ))}
                     </div>
