@@ -12,6 +12,18 @@ const formatDate = (iso) => {
   });
 };
 
+const GENDER_LABEL = {
+  MALE: 'Nam',
+  FEMALE: 'Nữ',
+  OTHER: 'Khác',
+};
+
+const genderLabel = (value) => {
+  if (!value) return '-';
+  const key = String(value).toUpperCase();
+  return GENDER_LABEL[key] || value;
+};
+
 function InfoRow({ label, value }) {
   return (
     <div className="admin-detail-row">
@@ -78,45 +90,45 @@ function UserDetailModal({ isOpen, onClose, user, role = 'customer' }) {
 
         <InfoRow label="Họ và tên" value={fullName} />
         <InfoRow label="Email" value={user.email} />
-        <InfoRow label="Số điện thoại" value={user.phone || user.phoneNumber} />
-        <InfoRow label="Tên đăng nhập" value={user.username || user.account?.username} />
+        <InfoRow label="Số điện thoại" value={user.phone || '-'} />
         <StatusBlock status={user.status || (user.active ? 'active' : 'inactive')} />
+
+        <InfoRow
+          label="Ngày sinh"
+          value={user.dateOfBirth ? formatDate(user.dateOfBirth) : '-'}
+        />
+        <InfoRow label="Giới tính" value={genderLabel(user.gender)} />
+        <InfoRow label="Địa chỉ" value={user.address || '-'} />
+        <InfoRow
+          label="Ngày tham gia"
+          value={user.createdAt ? formatDate(user.createdAt) : '-'}
+        />
 
         {isTherapist && (
           <>
             <InfoRow
               label="Chuyên môn"
-              value={user.specialty || user.expertise}
+              value={user.specialization || '-'}
             />
+            <InfoRow
+              label="Kinh nghiệm (năm)"
+              value={
+                user.experience !== null && user.experience !== undefined && user.experience !== ''
+                  ? `${user.experience} năm`
+                  : '-'
+              }
+            />
+            {user.certificate && <InfoRow label="Chứng chỉ" value={user.certificate} />}
             {user.bio && <InfoRow label="Giới thiệu" value={user.bio} />}
           </>
         )}
 
         {!isTherapist && (
-          <>
-            <InfoRow
-              label="Ngày sinh"
-              value={user.dob ? formatDate(user.dob) : null}
-            />
-            <InfoRow
-              label="Giới tính"
-              value={user.gender}
-            />
-            <InfoRow
-              label="Ngày tham gia"
-              value={user.createdAt ? formatDate(user.createdAt) : null}
-            />
-          </>
+          <InfoRow
+            label="Tổng lịch hẹn"
+            value={user.totalAppointments ?? user.appointmentCount ?? '-'}
+          />
         )}
-
-        <InfoRow
-          label={isTherapist ? 'Kinh nghiệm (năm)' : 'Tổng lịch hẹn'}
-          value={
-            isTherapist
-              ? user.experienceYears ?? user.yearsOfExperience
-              : user.totalAppointments ?? user.appointmentCount
-          }
-        />
       </div>
     </Modal>
   );

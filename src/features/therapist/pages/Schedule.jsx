@@ -72,7 +72,7 @@ function AppointmentRow({ appointment }) {
     <Link
       to={`/therapist/appointments/${appointment.id}`}
       className={`therapist-schedule-row ${
-        appointment.status === APPOINTMENT_STATUS.IN_TREATMENT ? 'is-live' : ''
+        appointment.status === APPOINTMENT_STATUS.IN_PROGRESS ? 'is-live' : ''
       } ${appointment.status === APPOINTMENT_STATUS.COMPLETED ? 'is-past' : ''}`}
     >
       <div className="therapist-schedule-time">

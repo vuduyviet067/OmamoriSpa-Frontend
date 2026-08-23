@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getMyTransactions, getTransactionById } from '@/services/customerService';
+import {
+  getMyTransactions,
+  getTransactionById,
+  createVnPayPayment,
+} from '@/services/customerService';
 import {
   Button,
   StatusBadge,
@@ -136,6 +140,9 @@ function CustomerTransactions() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState(null);
 
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentError, setPaymentError] = useState(null);
+
   const fetchTransactions = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -189,11 +196,48 @@ function CustomerTransactions() {
     }
   };
 
+  const handleOnlinePayment = async (transaction) => {
+    if (!transaction?.id || paymentLoading) {
+      return;
+    }
+
+    setPaymentLoading(true);
+    setPaymentError(null);
+
+    try {
+      const payment = await createVnPayPayment(transaction.id);
+
+      if (!payment?.paymentUrl) {
+        throw new Error(
+          'Không nhận được đường dẫn thanh toán từ VNPay.'
+        );
+      }
+
+      window.location.assign(payment.paymentUrl);
+    } catch (err) {
+      console.error(
+        'Error creating VNPay payment:',
+        err
+      );
+
+      setPaymentError(
+        err.response?.data?.message
+          || err.message
+          || 'Không thể khởi tạo thanh toán VNPay.'
+      );
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
   const closeDetail = () => {
     setDetailTarget(null);
     setDetail(null);
     setDetailError(null);
     setDetailLoading(false);
+
+    setPaymentError(null);
+    setPaymentLoading(false);
   };
 
   if (loading) {
@@ -484,6 +528,44 @@ function CustomerTransactions() {
               <span>Tổng tiền</span>
               <strong>{formatCurrency(getTotal(mergedDetail))}</strong>
             </div>
+
+            {getStatusKey(mergedDetail) === 'PENDING' && (
+              <div
+                style={{
+                  marginTop: 'var(--space-5)',
+                }}
+              >
+                {paymentError && (
+                  <div
+                    className="booking-alert booking-alert-error"
+                    role="alert"
+                    style={{
+                      marginBottom: 'var(--space-4)',
+                    }}
+                  >
+                    {paymentError}
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                  }}
+                >
+                  <Button
+                    type="button"
+                    onClick={() =>
+                      handleOnlinePayment(mergedDetail)
+                    }
+                    loading={paymentLoading}
+                    disabled={paymentLoading}
+                  >
+                    Thanh toán online
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </Modal>

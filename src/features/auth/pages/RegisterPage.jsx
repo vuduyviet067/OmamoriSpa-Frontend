@@ -6,12 +6,14 @@ import './RegisterPage.css';
 
 function RegisterPage() {
   const [formData, setFormData] = useState({
-    name: '',
-    phone: '',
+    fullName: '',
     email: '',
-    username: '',
     password: '',
     confirmPassword: '',
+    dateOfBirth: '',
+    gender: '',
+    phone: '',
+    address: '',
   });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
@@ -36,8 +38,8 @@ function RegisterPage() {
   };
 
   const validatePhone = (phone) => {
-    // Vietnamese phone: 10 digits, starting with 0
-    const phoneRegex = /^(0[0-9]{9})$/;
+    // Vietnamese phone: 10 digits, starting with 0 or +84
+    const phoneRegex = /^(0|\+84)[0-9]{9,10}$/;
     return phoneRegex.test(phone.replace(/\s/g, ''));
   };
 
@@ -52,7 +54,7 @@ function RegisterPage() {
 
   const getPasswordStrength = (password) => {
     if (!password) return { level: 0, text: '', color: '' };
-    
+
     let strength = 0;
     if (password.length >= 6) strength++;
     if (password.length >= 8) strength++;
@@ -68,18 +70,11 @@ function RegisterPage() {
   const validate = () => {
     const newErrors = {};
 
-    // Name validation
-    if (!formData.name.trim()) {
-      newErrors.name = 'Vui lòng nhập họ tên';
-    } else if (formData.name.trim().length < 2) {
-      newErrors.name = 'Họ tên phải có ít nhất 2 ký tự';
-    }
-
-    // Phone validation
-    if (!formData.phone.trim()) {
-      newErrors.phone = 'Vui lòng nhập số điện thoại';
-    } else if (!validatePhone(formData.phone)) {
-      newErrors.phone = 'Số điện thoại không hợp lệ (phải có 10 chữ số, bắt đầu bằng 0)';
+    // fullName validation
+    if (!formData.fullName.trim()) {
+      newErrors.fullName = 'Vui lòng nhập họ tên';
+    } else if (formData.fullName.trim().length < 2) {
+      newErrors.fullName = 'Họ tên phải có ít nhất 2 ký tự';
     }
 
     // Email validation
@@ -89,20 +84,11 @@ function RegisterPage() {
       newErrors.email = 'Email không đúng định dạng';
     }
 
-    // Username validation
-    if (!formData.username.trim()) {
-      newErrors.username = 'Vui lòng nhập tên đăng nhập';
-    } else if (formData.username.trim().length < 3) {
-      newErrors.username = 'Tên đăng nhập phải có ít nhất 3 ký tự';
-    } else if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
-      newErrors.username = 'Tên đăng nhập chỉ chứa chữ cái, số và dấu gạch dưới';
-    }
-
     // Password validation
     if (!formData.password) {
       newErrors.password = 'Vui lòng nhập mật khẩu';
     } else if (!validatePassword(formData.password)) {
-      newErrors.password = 'Mật khẩu phải có ít nhất 6 ký tự, gồm chữ hoa, chữ thường và số';
+      newErrors.password = 'Mật khẩu tối thiểu 6 ký tự, gồm ít nhất 1 chữ hoa, 1 chữ thường và 1 chữ số';
     }
 
     // Confirm password validation
@@ -110,6 +96,38 @@ function RegisterPage() {
       newErrors.confirmPassword = 'Vui lòng xác nhận mật khẩu';
     } else if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Mật khẩu xác nhận không khớp';
+    }
+
+    // dateOfBirth validation (must be in the past)
+    if (!formData.dateOfBirth) {
+      newErrors.dateOfBirth = 'Vui lòng nhập ngày sinh';
+    } else {
+      const dob = new Date(formData.dateOfBirth);
+      const today = new Date();
+      if (dob >= today) {
+        newErrors.dateOfBirth = 'Ngày sinh phải là một ngày trong quá khứ';
+      }
+    }
+
+    // Gender validation
+    if (!formData.gender) {
+      newErrors.gender = 'Vui lòng chọn giới tính';
+    } else if (!['MALE', 'FEMALE', 'OTHER'].includes(formData.gender)) {
+      newErrors.gender = 'Giới tính không hợp lệ';
+    }
+
+    // Phone validation
+    if (!formData.phone.trim()) {
+      newErrors.phone = 'Vui lòng nhập số điện thoại';
+    } else if (!validatePhone(formData.phone)) {
+      newErrors.phone = 'Số điện thoại không đúng định dạng (0xxxxxxxxx hoặc +84xxxxxxxxx)';
+    }
+
+    // Address validation
+    if (!formData.address.trim()) {
+      newErrors.address = 'Vui lòng nhập địa chỉ';
+    } else if (formData.address.trim().length < 5) {
+      newErrors.address = 'Địa chỉ phải có ít nhất 5 ký tự';
     }
 
     setErrors(newErrors);
@@ -127,27 +145,31 @@ function RegisterPage() {
 
     try {
       await register({
-        name: formData.name.trim(),
-        phone: formData.phone.trim(),
+        fullName: formData.fullName.trim(),
         email: formData.email.trim().toLowerCase(),
-        username: formData.username.trim(),
         password: formData.password,
+        dateOfBirth: formData.dateOfBirth, // Format: YYYY-MM-DD
+        gender: formData.gender, // MALE | FEMALE | OTHER
+        phone: formData.phone.trim(),
+        address: formData.address.trim(),
       });
 
       setSuccessMessage('Đăng ký thành công! Đang chuyển hướng...');
-      
+
       // Redirect to login after short delay
       setTimeout(() => {
-        navigate('/login', { 
-          state: { 
+        navigate('/login', {
+          state: {
             registered: true,
-            username: formData.username 
-          } 
+            email: formData.email
+          }
         });
       }, 1500);
     } catch (error) {
       if (error.response?.data?.message) {
         setApiError(error.response.data.message);
+      } else if (error.response?.data?.code === 1002) {
+        setApiError('Email đã được sử dụng. Vui lòng sử dụng email khác.');
       } else if (error.message) {
         setApiError(error.message);
       } else {
@@ -236,21 +258,11 @@ function RegisterPage() {
                 <Input
                   label="Họ và tên"
                   type="text"
-                  value={formData.name}
-                  onChange={handleChange('name')}
+                  value={formData.fullName}
+                  onChange={handleChange('fullName')}
                   placeholder="Nguyễn Văn A"
-                  error={errors.name}
+                  error={errors.fullName}
                   autoComplete="name"
-                />
-
-                <Input
-                  label="Số điện thoại"
-                  type="tel"
-                  value={formData.phone}
-                  onChange={handleChange('phone')}
-                  placeholder="0901 234 567"
-                  error={errors.phone}
-                  autoComplete="tel"
                 />
 
                 <Input
@@ -263,14 +275,50 @@ function RegisterPage() {
                   autoComplete="email"
                 />
 
+                <div className="input-row">
+                  <Input
+                    label="Ngày sinh"
+                    type="date"
+                    value={formData.dateOfBirth}
+                    onChange={handleChange('dateOfBirth')}
+                    placeholder="YYYY-MM-DD"
+                    error={errors.dateOfBirth}
+                  />
+
+                  <div className="input-field">
+                    <label className="input-label">Giới tính</label>
+                    <select
+                      value={formData.gender}
+                      onChange={handleChange('gender')}
+                      className={`input-select ${errors.gender ? 'input-error' : ''}`}
+                    >
+                      <option value="">Chọn giới tính</option>
+                      <option value="MALE">Nam</option>
+                      <option value="FEMALE">Nữ</option>
+                      <option value="OTHER">Khác</option>
+                    </select>
+                    {errors.gender && <span className="input-error-text">{errors.gender}</span>}
+                  </div>
+                </div>
+
                 <Input
-                  label="Tên đăng nhập"
+                  label="Số điện thoại"
+                  type="tel"
+                  value={formData.phone}
+                  onChange={handleChange('phone')}
+                  placeholder="0901 234 567"
+                  error={errors.phone}
+                  autoComplete="tel"
+                />
+
+                <Input
+                  label="Địa chỉ"
                   type="text"
-                  value={formData.username}
-                  onChange={handleChange('username')}
-                  placeholder="username"
-                  error={errors.username}
-                  autoComplete="username"
+                  value={formData.address}
+                  onChange={handleChange('address')}
+                  placeholder="123 Đường ABC, Quận 1, TP.HCM"
+                  error={errors.address}
+                  autoComplete="street-address"
                 />
 
                 <div className="input-group">
@@ -279,18 +327,18 @@ function RegisterPage() {
                     type="password"
                     value={formData.password}
                     onChange={handleChange('password')}
-                    placeholder=" Ít nhất 6 ký tự, có hoa thường và số"
+                    placeholder="Ít nhất 6 ký tự, có hoa thường và số"
                     error={errors.password}
                     autoComplete="new-password"
                   />
                   {formData.password && (
                     <div className="password-strength">
                       <div className="password-strength-bar">
-                        <div 
+                        <div
                           className="password-strength-fill"
-                          style={{ 
+                          style={{
                             width: `${(passwordStrength.level / 3) * 100}%`,
-                            backgroundColor: passwordStrength.color 
+                            backgroundColor: passwordStrength.color
                           }}
                         />
                       </div>

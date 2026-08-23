@@ -15,24 +15,28 @@ import {
   ErrorState,
   ConfirmDialog,
 } from '@/components/common';
-import { formatDuration } from '@/utils/formatters';
 import useFlashMessage from '@/hooks/useFlashMessage';
+import { formatDuration } from '@/utils/formatters';
 
 const TRANSITION_BUTTON_META = {
+  [APPOINTMENT_STATUS.PENDING]: {
+    label: 'Chờ xác nhận',
+    helper: 'Ca đã được phân công cho bạn và đang chờ xác nhận.',
+    buttonLabel: 'Xác nhận ca',
+  },
+
+
   [APPOINTMENT_STATUS.CONFIRMED]: {
     label: 'Đã xác nhận',
-    helper: 'Ca đã được xác nhận, sẵn sàng tiếp nhận khách.',
-    buttonLabel: 'Tiếp nhận khách',
-  },
-  [APPOINTMENT_STATUS.ACCEPTED]: {
-    label: 'Đã tiếp nhận',
-    helper: 'Xác nhận bạn sẽ phụ trách ca này.',
+    helper: 'Ca đã được xác nhận và sẵn sàng bắt đầu.',
     buttonLabel: 'Bắt đầu trị liệu',
   },
-  [APPOINTMENT_STATUS.IN_TREATMENT]: {
+
+
+  [APPOINTMENT_STATUS.IN_PROGRESS]: {
     label: 'Đang trị liệu',
-    helper: 'Ca đang được thực hiện.',
-    buttonLabel: 'Hoàn thành trị liệu',
+    helper: 'Hãy mở hồ sơ trị liệu để ghi nhật ký và hoàn tất ca.',
+    buttonLabel: null,
   },
 };
 
@@ -46,19 +50,6 @@ const formatDateLong = (iso) => {
 const formatTime = (timeString) => {
   if (!timeString) return '';
   return String(timeString).substring(0, 5);
-};
-
-/**
- * Returns a Date for the appointment start, or null if invalid.
- */
-const parseStart = (appointment) => {
-  if (!appointment?.date) return null;
-  const datePart = appointment.date.length > 10
-    ? appointment.date.split('T')[0]
-    : appointment.date;
-  const startTime = (appointment.startTime || '00:00').substring(0, 5);
-  const start = new Date(`${datePart}T${startTime}:00`);
-  return Number.isNaN(start.getTime()) ? null : start;
 };
 
 const getCustomerName = (apt) =>
@@ -108,11 +99,11 @@ function TherapistAppointmentDetail() {
     loadAppointment();
   }, [loadAppointment]);
 
-  const start = useMemo(() => parseStart(appointment), [appointment]);
-
-  // Therapists can only progress an appointment that has already begun,
-  // except for the initial "accept" step (PENDING/CONFIRMED -> ACCEPTED),
-  // which we allow before start so they can confirm upcoming shifts.
+  // Therapists can progress an appointment in two steps:
+  //   PENDING   -> CONFIRMED
+  //   CONFIRMED -> IN_PROGRESS
+  // The final IN_PROGRESS -> COMPLETED transition is owned by the
+  // treatment journal on the backend.
   const transitions = useMemo(() => {
     if (!appointment) return [];
     return ALLOWED_TRANSITIONS[appointment.status] || [];
@@ -122,30 +113,25 @@ function TherapistAppointmentDetail() {
   const nextStatus = meta ? transitions[0] : null;
 
   const canTransitionTo = useCallback((next) => {
-    if (!appointment || !next) return false;
-    if (!transitions.includes(next)) return false;
-    if (!start) return true; // backend is the source of truth; allow optimistic UI.
-    // Block IN_TREATMENT/COMPLETED transitions when the start is in the future,
-    // but allow ACCEPTED transitions at any time (technicians can confirm shifts).
-    const now = Date.now();
-    if (next === APPOINTMENT_STATUS.IN_TREATMENT) {
-      // Allow starting up to 15 minutes before the official start.
-      return start.getTime() - 15 * 60 * 1000 <= now;
+    if (!appointment || !next) {
+      return false;
     }
-    if (next === APPOINTMENT_STATUS.COMPLETED) {
-      // Cannot complete before the appointment begins.
-      return start.getTime() <= now;
-    }
-    return true;
-  }, [appointment, transitions, start]);
+
+    return transitions.includes(next);
+  }, [appointment, transitions]);
 
   const requestTransition = (next) => {
     if (!canTransitionTo(next)) return;
-    if (next === APPOINTMENT_STATUS.IN_TREATMENT || next === APPOINTMENT_STATUS.ACCEPTED) {
-      // Inline transition - no confirmation modal needed.
+
+
+    // Bắt đầu trị liệu thực hiện trực tiếp.
+    if (next === APPOINTMENT_STATUS.IN_PROGRESS) {
       handleTransition(next);
       return;
     }
+
+
+    // Xác nhận PENDING -> CONFIRMED cần dialog.
     setPendingTransition(next);
   };
 
@@ -192,9 +178,12 @@ function TherapistAppointmentDetail() {
   const isTerminal = appointment.status === APPOINTMENT_STATUS.COMPLETED
     || appointment.status === APPOINTMENT_STATUS.CANCELLED;
   const noteText = appointment.notes || appointment.note || appointment.customerNote || null;
-  const showTreatmentLink = appointment.status === APPOINTMENT_STATUS.ACCEPTED
-    || appointment.status === APPOINTMENT_STATUS.IN_TREATMENT
+  const showTreatmentLink =
+    appointment.status === APPOINTMENT_STATUS.IN_PROGRESS
     || appointment.status === APPOINTMENT_STATUS.COMPLETED;
+
+  const isInProgress =
+    appointment.status === APPOINTMENT_STATUS.IN_PROGRESS;
 
   return (
     <div className="therapist-appointment-detail">
@@ -252,7 +241,7 @@ function TherapistAppointmentDetail() {
           </div>
           <div className="booking-detail-row">
             <span className="booking-detail-label">Phòng</span>
-            <span className="booking-detail-value">Phòng {getRoomName(appointment)}</span>
+            <span className="booking-detail-value">{getRoomName(appointment)}</span>
           </div>
           {appointment.service?.price !== undefined && appointment.service?.price !== null && (
             <div className="booking-detail-row">
@@ -312,8 +301,22 @@ function TherapistAppointmentDetail() {
                   </div>
                 );
               })}
-              {!transitions.length && (
-                <div className="therapist-status-locked" role="status">
+              {isInProgress && (
+                <div
+                  className="therapist-status-locked"
+                  role="status"
+                >
+                  Ca đang được thực hiện. Hãy mở hồ sơ trị liệu để
+                  ghi nhật ký và hoàn tất ca.
+                </div>
+              )}
+
+
+              {!transitions.length && !isInProgress && (
+                <div
+                  className="therapist-status-locked"
+                  role="status"
+                >
                   Trạng thái hiện tại không cho phép thao tác thêm.
                 </div>
               )}
@@ -335,25 +338,26 @@ function TherapistAppointmentDetail() {
       </section>
 
       <ConfirmDialog
-        isOpen={pendingTransition === APPOINTMENT_STATUS.ACCEPTED}
-        onClose={() => !actionLoading && setPendingTransition(null)}
-        onConfirm={() => handleTransition(APPOINTMENT_STATUS.ACCEPTED)}
-        title="Xác nhận tiếp nhận ca"
-        message={`Bạn xác nhận sẽ phụ trách ca ${getServiceName(appointment)} cho khách ${getCustomerName(appointment)}?`}
-        confirmText="Tiếp nhận"
+        isOpen={
+          pendingTransition ===
+          APPOINTMENT_STATUS.CONFIRMED
+        }
+        onClose={() => {
+          if (!actionLoading) {
+            setPendingTransition(null);
+          }
+        }}
+        onConfirm={() =>
+          handleTransition(
+            APPOINTMENT_STATUS.CONFIRMED
+          )
+        }
+        title="Xác nhận ca trị liệu"
+        message={`Bạn xác nhận tiếp nhận ca ${getServiceName(
+          appointment
+        )} cho khách ${getCustomerName(appointment)}?`}
+        confirmText="Xác nhận ca"
         cancelText="Hủy"
-        loading={actionLoading}
-      />
-
-      <ConfirmDialog
-        isOpen={pendingTransition === APPOINTMENT_STATUS.COMPLETED}
-        onClose={() => !actionLoading && setPendingTransition(null)}
-        onConfirm={() => handleTransition(APPOINTMENT_STATUS.COMPLETED)}
-        title="Hoàn thành ca trị liệu"
-        message={`Xác nhận ca ${getServiceName(appointment)} đã hoàn thành? Bạn sẽ không thể chuyển trạng thái về trước đó.`}
-        confirmText="Hoàn thành"
-        cancelText="Hủy"
-        variant="primary"
         loading={actionLoading}
       />
 

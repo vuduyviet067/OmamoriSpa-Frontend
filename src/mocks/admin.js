@@ -281,7 +281,7 @@ export const adminAppointments = [
 const makeInvoice = (id, code, customerId, items, status, method, daysOffset) => {
   const d = addDays(today, daysOffset);
   const cust = mockCustomer(customerId);
-  const total = items.reduce((sum, it) => sum + it.total, 0);
+  const total = items.reduce((sum, it) => sum + it.subtotal, 0);
   return {
     id,
     code,
@@ -289,7 +289,7 @@ const makeInvoice = (id, code, customerId, items, status, method, daysOffset) =>
     customerId,
     customerName: cust.name,
     customer: cust,
-    items,
+    items: items.map((it) => ({ ...it })),
     subtotal: total,
     totalAmount: total,
     amount: total,
@@ -298,6 +298,9 @@ const makeInvoice = (id, code, customerId, items, status, method, daysOffset) =>
     createdAt: d.toISOString(),
     date: isoDate(d),
     paymentMethod: status === 'PAID' ? method : null,
+    type: items.some((it) => it.itemType === 'COSMETIC') && !items.some((it) => it.itemType === 'SERVICE')
+      ? 'RETAIL'
+      : 'APPOINTMENT',
   };
 };
 
@@ -307,7 +310,7 @@ export const adminInvoices = [
     'INV-2026-0001',
     1,
     [
-      { id: 1, name: 'Massage thư giãn', type: 'SERVICE', quantity: 1, unitPrice: 450000, total: 450000 },
+      { id: 1, itemType: 'SERVICE', itemName: 'Massage thư giãn', quantity: 1, unitPrice: 450000, subtotal: 450000 },
     ],
     'PAID',
     'CASH',
@@ -318,8 +321,8 @@ export const adminInvoices = [
     'INV-2026-0002',
     2,
     [
-      { id: 2, name: 'Chăm sóc da mặt', type: 'SERVICE', quantity: 1, unitPrice: 380000, total: 380000 },
-      { id: 3, name: 'Serum phục hồi', type: 'COSMETIC', quantity: 1, unitPrice: 420000, total: 420000 },
+      { id: 2, itemType: 'SERVICE', itemName: 'Chăm sóc da mặt', quantity: 1, unitPrice: 380000, subtotal: 380000 },
+      { id: 3, itemType: 'COSMETIC', itemName: 'Serum phục hồi', quantity: 1, unitPrice: 420000, subtotal: 420000 },
     ],
     'PAID',
     'BANK_TRANSFER',
@@ -330,9 +333,9 @@ export const adminInvoices = [
     'INV-2026-0003',
     3,
     [
-      { id: 4, name: 'Liệu pháp đá nóng', type: 'SERVICE', quantity: 1, unitPrice: 520000, total: 520000 },
+      { id: 4, itemType: 'SERVICE', itemName: 'Liệu pháp đá nóng', quantity: 1, unitPrice: 520000, subtotal: 520000 },
     ],
-    'UNPAID',
+    'PENDING_PAYMENT',
     null,
     0
   ),
@@ -341,10 +344,10 @@ export const adminInvoices = [
     'INV-2026-0004',
     5,
     [
-      { id: 5, name: 'Gội đầu dưỡng sinh', type: 'SERVICE', quantity: 1, unitPrice: 280000, total: 280000 },
-      { id: 6, name: 'Kem dưỡng ẩm', type: 'COSMETIC', quantity: 2, unitPrice: 350000, total: 700000 },
+      { id: 5, itemType: 'SERVICE', itemName: 'Gội đầu dưỡng sinh', quantity: 1, unitPrice: 280000, subtotal: 280000 },
+      { id: 6, itemType: 'COSMETIC', itemName: 'Kem dưỡng ẩm', quantity: 2, unitPrice: 350000, subtotal: 700000 },
     ],
-    'PENDING',
+    'PENDING_PAYMENT',
     null,
     0
   ),
@@ -353,10 +356,10 @@ export const adminInvoices = [
     'INV-2026-0005',
     6,
     [
-      { id: 7, name: 'Massage thư giãn', type: 'SERVICE', quantity: 1, unitPrice: 450000, total: 450000 },
+      { id: 7, itemType: 'SERVICE', itemName: 'Massage thư giãn', quantity: 1, unitPrice: 450000, subtotal: 450000 },
     ],
     'PAID',
-    'CARD',
+    'BANK_TRANSFER',
     -5
   ),
   makeInvoice(
@@ -364,10 +367,10 @@ export const adminInvoices = [
     'INV-2026-0006',
     2,
     [
-      { id: 8, name: 'Tinh dầu oải hương', type: 'COSMETIC', quantity: 1, unitPrice: 280000, total: 280000 },
+      { id: 8, itemType: 'COSMETIC', itemName: 'Tinh dầu oải hương', quantity: 1, unitPrice: 280000, subtotal: 280000 },
     ],
     'PAID',
-    'CARD',
+    'CASH',
     -7
   ),
   makeInvoice(
@@ -375,7 +378,7 @@ export const adminInvoices = [
     'INV-2026-0007',
     1,
     [
-      { id: 9, name: 'Chăm sóc da mặt', type: 'SERVICE', quantity: 1, unitPrice: 380000, total: 380000 },
+      { id: 9, itemType: 'SERVICE', itemName: 'Chăm sóc da mặt', quantity: 1, unitPrice: 380000, subtotal: 380000 },
     ],
     'CANCELLED',
     null,
@@ -446,7 +449,7 @@ export const computeDashboardOverview = () => {
     pendingAppointments: adminAppointments.filter((a) => a.status === 'PENDING').length,
     revenueMonth: paidInvoices.reduce((s, inv) => s + (inv.totalAmount || 0), 0),
     totalInvoices: adminInvoices.length,
-    pendingInvoices: adminInvoices.filter((i) => i.status === 'UNPAID' || i.status === 'PENDING').length,
+    pendingInvoices: adminInvoices.filter((i) => i.status === 'PENDING_PAYMENT').length,
     totalCustomers: adminCustomers.length,
     activeCustomers: adminCustomers.filter((c) => c.active).length,
     totalTherapists: adminTherapists.length,
@@ -490,11 +493,11 @@ export const computeReport = (from, to) => {
   );
 
   const serviceRevenue = items
-    .filter((it) => (it.type || 'SERVICE') === 'SERVICE')
-    .reduce((s, it) => s + (it.total || 0), 0);
+    .filter((it) => (it.itemType || it.type || 'SERVICE') === 'SERVICE')
+    .reduce((s, it) => s + (it.subtotal || it.total || 0), 0);
   const cosmeticRevenue = items
-    .filter((it) => it.type === 'COSMETIC')
-    .reduce((s, it) => s + (it.total || 0), 0);
+    .filter((it) => (it.itemType || it.type) === 'COSMETIC')
+    .reduce((s, it) => s + (it.subtotal || it.total || 0), 0);
 
   // Build a daily trend within range.
   const dayMap = new Map();
@@ -512,12 +515,12 @@ export const computeReport = (from, to) => {
 
   const byCosmetic = new Map();
   items
-    .filter((it) => it.type === 'COSMETIC')
+    .filter((it) => (it.itemType || it.type) === 'COSMETIC')
     .forEach((it) => {
-      const key = it.name;
-      const cur = byCosmetic.get(key) || { name: it.name, quantity: 0, revenue: 0 };
+      const key = it.itemName || it.name;
+      const cur = byCosmetic.get(key) || { name: key, quantity: 0, revenue: 0 };
       cur.quantity += it.quantity || 0;
-      cur.revenue += it.total || 0;
+      cur.revenue += it.subtotal || it.total || 0;
       byCosmetic.set(key, cur);
     });
 

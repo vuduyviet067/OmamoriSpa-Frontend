@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Button,
   EmptyState,
@@ -10,10 +10,10 @@ import {
 import { formatCurrency } from '@/utils/formatters';
 import {
   extractApiError,
-  getAppointmentsForReport,
-  getCustomersForReport,
-  getPaidInvoicesForReport,
-  getReportsOverview,
+  getAdminRevenueReport,
+  getAdminInventoryReport,
+  getAdminCustomerStats,
+  getAdminAppointmentStats,
 } from '@/services/adminService';
 
 // =========================================================
@@ -24,7 +24,7 @@ const PRESETS = [
   { id: 'week', label: 'Tuần này' },
   { id: 'month', label: 'Tháng này' },
   { id: 'quarter', label: 'Quý này' },
-  { id: 'year', label: 'Năm này' },
+  { id: 'year', label: 'Năm nay' },
   { id: 'custom', label: 'Khoảng ngày' },
 ];
 
@@ -66,10 +66,11 @@ function resolveRange(preset, customStart, customEnd) {
     return [startOfDay(now), endOfDay(now)];
   }
   if (preset === 'week') {
-    // Tuần này: thứ 2 → hôm nay (theo múa local)
-    const day = now.getDay(); // 0=CN, 1=T2, ...
+    const day = now.getDay();
     const diffToMonday = (day + 6) % 7;
-    const monday = startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday));
+    const monday = startOfDay(
+      new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday),
+    );
     return [monday, endOfDay(now)];
   }
   if (preset === 'month') {
@@ -91,149 +92,30 @@ function resolveRange(preset, customStart, customEnd) {
   return [startOfDay(new Date(now.getFullYear(), now.getMonth(), 1)), endOfDay(now)];
 }
 
-// =========================================================
-// Helpers - normalise backend shapes
-// =========================================================
-const pickNumber = (...vals) => {
-  for (const v of vals) {
-    if (v === undefined || v === null || v === '') continue;
-    const n = Number(v);
-    if (!Number.isNaN(n)) return n;
+/**
+ * Choose trend granularity based on the SELECTED time range / preset,
+ * not on how many points the backend returned.
+ *
+ * - Hôm nay / Tuần này / Tháng này  -> byDay
+ * - Quý này / Năm nay               -> byMonth
+ * - Custom range:
+ *     span <= 62 calendar days      -> byDay
+ *     span >  62 calendar days      -> byMonth
+ */
+function resolveGranularity(preset, range) {
+  if (preset === 'today' || preset === 'week' || preset === 'month') {
+    return 'day';
   }
-  return 0;
-};
-
-const pickString = (...vals) => {
-  for (const v of vals) {
-    if (v === undefined || v === null) continue;
-    return String(v);
+  if (preset === 'quarter' || preset === 'year') {
+    return 'month';
   }
-  return '';
-};
-
-const parseDate = (value) => {
-  if (!value) return null;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d;
-};
-
-const normaliseInvoice = (inv) => {
-  const id = inv.id ?? inv._id;
-  const status = pickString(inv.status, 'PENDING').toUpperCase();
-  const createdAt = inv.createdAt || inv.issuedAt || inv.paidAt || inv.date;
-  const total = pickNumber(inv.totalAmount, inv.total, inv.amount, 0);
-  const serviceAmount = pickNumber(inv.serviceAmount, inv.serviceTotal);
-  const cosmeticAmount = pickNumber(inv.cosmeticAmount, inv.productAmount, inv.itemsAmount);
-  const items = Array.isArray(inv.items) ? inv.items.map((item) => ({
-    type: pickString(item.type, item.kind, 'SERVICE').toUpperCase(),
-    name: pickString(item.name, item.serviceName, item.cosmeticName, item.productName, 'Sản phẩm'),
-    quantity: pickNumber(item.quantity, item.qty, 1),
-    total: pickNumber(item.total, item.amount, 0),
-  })) : [];
-  return { id, status, createdAt, total, serviceAmount, cosmeticAmount, items, raw: inv };
-};
-
-const normaliseCustomer = (c) => ({
-  id: c.id ?? c._id,
-  createdAt: c.createdAt || c.registeredAt || c.joinedAt,
-});
-
-const normaliseAppointment = (apt) => ({
-  id: apt.id ?? apt._id,
-  createdAt: apt.createdAt || apt.date || apt.startTime,
-});
-
-// =========================================================
-// Local computation from paid invoices / customers / appointments
-// (used when the backend doesn't pre-aggregate the report)
-// =========================================================
-function computeKpis({ paidInvoices, customers, appointments, inventory }) {
-  let revenue = 0;
-  let serviceRevenue = 0;
-  let cosmeticRevenue = 0;
-  const dailyMap = new Map(); // yyyy-mm-dd -> revenue
-  const monthlyMap = new Map(); // yyyy-mm -> revenue
-  const cosmeticAgg = new Map(); // name -> { quantity, revenue }
-
-  paidInvoices.forEach((inv) => {
-    revenue += inv.total;
-    serviceRevenue += inv.serviceAmount || 0;
-    cosmeticRevenue += inv.cosmeticAmount || 0;
-    const d = parseDate(inv.createdAt);
-    if (d) {
-      const dayKey = toISODate(d);
-      dailyMap.set(dayKey, (dailyMap.get(dayKey) || 0) + inv.total);
-      const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      monthlyMap.set(monthKey, (monthlyMap.get(monthKey) || 0) + inv.total);
-    }
-    inv.items.forEach((item) => {
-      if (item.type === 'COSMETIC' || item.type === 'PRODUCT') {
-        const key = item.name;
-        const prev = cosmeticAgg.get(key) || { quantity: 0, revenue: 0 };
-        cosmeticAgg.set(key, {
-          quantity: prev.quantity + item.quantity,
-          revenue: prev.revenue + item.total,
-        });
-      }
-    });
-  });
-
-  const totalStock = Array.isArray(inventory)
-    ? inventory.reduce((sum, row) => sum + pickNumber(row.stock, row.quantity, 0), 0)
-    : 0;
-
-  const topCosmetics = Array.from(cosmeticAgg.entries())
-    .map(([name, v]) => ({ name, ...v }))
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 5);
-
-  return {
-    revenue,
-    serviceRevenue,
-    cosmeticRevenue,
-    appointmentCount: appointments.length,
-    customerCount: customers.length,
-    newCustomerCount: customers.length,
-    totalStock,
-    dailyRevenue: Array.from(dailyMap.entries())
-      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-      .map(([date, value]) => ({ date, value })),
-    monthlyRevenue: Array.from(monthlyMap.entries())
-      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-      .map(([month, value]) => ({ month, value })),
-    topCosmetics,
-  };
-}
-
-function readBackendKpis(payload) {
-  if (!payload || typeof payload !== 'object') return null;
-  const revenue = payload.revenue || {};
-  const customers = payload.customers || {};
-  const appointments = payload.appointments || {};
-  const inventory = payload.inventory || {};
-  return {
-    revenue: pickNumber(revenue.total, payload.totalRevenue),
-    serviceRevenue: pickNumber(revenue.serviceAmount, revenue.service),
-    cosmeticRevenue: pickNumber(revenue.cosmeticAmount, revenue.cosmetic),
-    appointmentCount: pickNumber(appointments.total, payload.totalAppointments),
-    customerCount: pickNumber(customers.total, payload.totalCustomers),
-    newCustomerCount: pickNumber(customers.newCount, payload.newCustomers),
-    totalStock: pickNumber(inventory.totalStock, inventory.stock, payload.totalStock),
-    dailyRevenue: Array.isArray(revenue.byDay)
-      ? revenue.byDay.map((p) => ({ date: pickString(p.date, p.day), value: pickNumber(p.value, p.total, p.amount) }))
-      : [],
-    monthlyRevenue: Array.isArray(revenue.byMonth)
-      ? revenue.byMonth.map((p) => ({ month: pickString(p.month, p.date), value: pickNumber(p.value, p.total, p.amount) }))
-      : [],
-    topCosmetics: Array.isArray(revenue.topCosmetics)
-      ? revenue.topCosmetics.map((p) => ({
-        name: pickString(p.name, p.cosmeticName, 'Sản phẩm'),
-        quantity: pickNumber(p.quantity, p.qty, 0),
-        revenue: pickNumber(p.revenue, p.total, p.amount),
-      }))
-      : [],
-  };
+  // custom
+  if (!range) return 'day';
+  const [s, e] = range;
+  const start = startOfDay(s).getTime();
+  const end = startOfDay(e).getTime();
+  const spanDays = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
+  return spanDays > 62 ? 'month' : 'day';
 }
 
 // =========================================================
@@ -271,7 +153,6 @@ function LineChart({ data, formatY, height: chartHeight = 220 }) {
     return { x, y, value: d.value, label: d.date || d.month };
   });
 
-  // Build path
   const path = points.length === 0
     ? ''
     : points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ');
@@ -279,19 +160,16 @@ function LineChart({ data, formatY, height: chartHeight = 220 }) {
     ? ''
     : `${path} L ${points[points.length - 1].x.toFixed(2)} ${(padding.top + innerHeight).toFixed(2)} L ${points[0].x.toFixed(2)} ${(padding.top + innerHeight).toFixed(2)} Z`;
 
-  // Y-axis ticks (4 lines)
   const yTicks = [0, 0.25, 0.5, 0.75, 1].map((p) => ({
     y: padding.top + innerHeight - p * innerHeight,
     value: Math.round(min + p * range),
   }));
 
-  // Show at most 6 X labels
   const labelStep = Math.max(1, Math.ceil(data.length / 6));
   const xLabels = points.map((p, i) => ({ ...p, show: i % labelStep === 0 || i === points.length - 1 }));
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Biểu đồ doanh thu" style={{ width: '100%', height: 'auto' }}>
-      {/* Y grid */}
       {yTicks.map((t, i) => (
         <g key={`y-${i}`}>
           <line
@@ -313,7 +191,6 @@ function LineChart({ data, formatY, height: chartHeight = 220 }) {
           </text>
         </g>
       ))}
-      {/* Area + line */}
       {data.length > 0 && (
         <>
           <path d={areaPath} fill="var(--color-green-pale)" opacity="0.7" />
@@ -323,7 +200,6 @@ function LineChart({ data, formatY, height: chartHeight = 220 }) {
           ))}
         </>
       )}
-      {/* X labels */}
       {xLabels.map((p, i) => (
         p.show ? (
           <text
@@ -404,7 +280,7 @@ function DonutChart({ service, cosmetic }) {
       <div className="report-donut-legend">
         <div className="report-donut-legend-row">
           <span className="report-donut-swatch" style={{ backgroundColor: 'var(--color-green-deep)' }} />
-          <span className="report-donut-label">Dịch vụ</span>
+          <span className="report-donut-label">Dịch vụ trị liệu</span>
           <span className="report-donut-value">{formatCurrency(service)}</span>
           <span className="report-donut-pct">{total > 0 ? `${Math.round(serviceShare * 100)}%` : '-'}</span>
         </div>
@@ -450,14 +326,17 @@ function AdminReports() {
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const [rangeError, setRangeError] = useState(null);
+  const [range, setRange] = useState(() => resolveRange('month', '', ''));
 
-  const [overview, setOverview] = useState(null);
+  const [revenue, setRevenue] = useState(null);
+  const [inventory, setInventory] = useState(null);
+  const [customers, setCustomers] = useState(null);
+  const [appointments, setAppointments] = useState(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const [range, setRange] = useState(() => resolveRange('month', '', ''));
-
-  // Recompute range when preset or custom dates change
+  // Recompute range when preset or custom dates change.
   useEffect(() => {
     if (preset !== 'custom') {
       setRangeError(null);
@@ -465,16 +344,17 @@ function AdminReports() {
       setRange(next);
       return;
     }
-    // Custom validation
     const s = parseISODate(customStart);
     const e = parseISODate(customEnd);
     if (s && e && s.getTime() > e.getTime()) {
-      setRangeError('Mốc thời gian không hợp lệ, vui lòng chọn lại.');
+      setRangeError('Mốc thời gian không hợp lệ, vui lòng chọn lại');
       setRange(null);
       return;
     }
     setRangeError(null);
-    setRange(resolveRange('custom', customStart, customEnd || toISODate(new Date())));
+    setRange(
+      resolveRange('custom', customStart, customEnd || toISODate(new Date())),
+    );
   }, [preset, customStart, customEnd]);
 
   const fetchReport = useCallback(async () => {
@@ -482,118 +362,90 @@ function AdminReports() {
     setLoading(true);
     setError(null);
     try {
-      const [from, to] = range;
-      const params = {
-        from: from.toISOString(),
-        to: to.toISOString(),
-        range: preset,
-      };
-      const payload = await getReportsOverview(params);
-      setOverview(payload || {});
+      const [start, end] = range;
+      const from = toISODate(start);
+      const to = toISODate(end);
+      // Inventory is a current snapshot - do NOT pass from/to.
+      const [revenueRes, inventoryRes, customersRes, appointmentsRes] = await Promise.all([
+        getAdminRevenueReport({ from, to }),
+        getAdminInventoryReport(),
+        getAdminCustomerStats({ from, to }),
+        getAdminAppointmentStats({ from, to }),
+      ]);
+      setRevenue(revenueRes || {});
+      setInventory(inventoryRes || {});
+      setCustomers(customersRes || {});
+      setAppointments(appointmentsRes || {});
     } catch (err) {
       setError(extractApiError(err, 'Không thể tải báo cáo.'));
-      setOverview({});
+      setRevenue({});
+      setInventory({});
+      setCustomers({});
+      setAppointments({});
     } finally {
       setLoading(false);
     }
-  }, [range, preset]);
+  }, [range]);
 
   useEffect(() => {
     fetchReport();
   }, [fetchReport]);
 
-  // Derived KPIs - prefer backend `overview`, else compute from paid invoices
-  const derivedKpis = useMemo(() => {
-    if (!overview) return null;
-    const fromBackend = readBackendKpis(overview);
-    if (fromBackend && (fromBackend.revenue || fromBackend.appointmentCount)) {
-      return fromBackend;
-    }
-    return null;
-  }, [overview]);
+  // Derived numbers from backend-aggregated payloads.
+  const totalRevenue = Number(revenue?.total || 0);
+  const serviceAmount = Number(revenue?.serviceAmount || 0);
+  const cosmeticAmount = Number(revenue?.cosmeticAmount || 0);
+  const byDay = Array.isArray(revenue?.byDay) ? revenue.byDay : [];
+  const byMonth = Array.isArray(revenue?.byMonth) ? revenue.byMonth : [];
+  const topCosmetics = Array.isArray(revenue?.topCosmetics) ? revenue.topCosmetics : [];
 
-  const needsLocalCompute = !derivedKpis;
+  const totalStock = Number(inventory?.totalStock || 0);
+  const lowStockCount = Number(inventory?.lowStockCount || 0);
+  const outOfStockCount = Number(inventory?.outOfStockCount || 0);
+  const lowStockThreshold = Number(inventory?.lowStockThreshold || 0);
+  const lowStockItems = Array.isArray(inventory?.lowStockItems) ? inventory.lowStockItems : [];
+  const outOfStockItems = Array.isArray(inventory?.outOfStockItems) ? inventory.outOfStockItems : [];
 
-  // Local computation fallback
-  const [localKpis, setLocalKpis] = useState(null);
-  const [localLoading, setLocalLoading] = useState(false);
-  const [localError, setLocalError] = useState(null);
+  const totalCustomers = Number(customers?.totalCustomers || 0);
+  const newCustomers = Number(customers?.newCustomers || 0);
 
-  useEffect(() => {
-    if (!needsLocalCompute || !range) return;
-    let cancelled = false;
-    (async () => {
-      setLocalLoading(true);
-      setLocalError(null);
-      try {
-        const [from, to] = range;
-        const commonParams = {
-          from: from.toISOString(),
-          to: to.toISOString(),
-        };
-        const [paidInvoices, customers, appointments] = await Promise.all([
-          getPaidInvoicesForReport(commonParams).catch(() => []),
-          getCustomersForReport(commonParams).catch(() => []),
-          getAppointmentsForReport(commonParams).catch(() => []),
-        ]);
-        if (cancelled) return;
-        const normalised = {
-          paidInvoices: paidInvoices.map(normaliseInvoice),
-          customers: customers.map(normaliseCustomer),
-          appointments: appointments.map(normaliseAppointment),
-          inventory: [],
-        };
-        setLocalKpis(computeKpis(normalised));
-      } catch (err) {
-        if (cancelled) return;
-        setLocalError(extractApiError(err, 'Không thể tải dữ liệu báo cáo.'));
-        setLocalKpis(null);
-      } finally {
-        if (!cancelled) setLocalLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [needsLocalCompute, range]);
+  const totalAppointments = Number(appointments?.totalAppointments || 0);
+  const completedAppointments = Number(appointments?.completedAppointments || 0);
 
-  const kpis = derivedKpis || localKpis;
+  // Trend granularity is driven by the SELECTED range / preset,
+  // not by the number of returned data points. A short range that
+  // happens to contain revenue on only one day is still shown as a
+  // daily trend with that single real point.
+  const granularity = resolveGranularity(preset, range);
+  const revenueSeries = granularity === 'day' ? byDay : byMonth;
+  const showTrendType = granularity === 'day' ? 'ngày' : 'tháng';
 
-  // Range label
-  const rangeLabel = useMemo(() => {
+  // "No period activity" only when period-dependent metrics are all zero.
+  // All-time inventory / totalCustomers are intentionally excluded.
+  const isEmpty = !loading
+    && !error
+    && !rangeError
+    && totalRevenue === 0
+    && newCustomers === 0
+    && totalAppointments === 0;
+
+  const rangeLabel = (() => {
     if (!range) return '';
     const [s, e] = range;
-    const fmt = (d) => d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const fmt = (d) => d.toLocaleDateString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
     if (toISODate(s) === toISODate(e)) return fmt(s);
     return `${fmt(s)} - ${fmt(e)}`;
-  }, [range]);
-
-  const isEmpty = !loading && !error && !rangeError && kpis
-    && kpis.revenue === 0
-    && kpis.serviceRevenue === 0
-    && kpis.cosmeticRevenue === 0
-    && (kpis.dailyRevenue || []).length === 0
-    && (kpis.monthlyRevenue || []).length === 0
-    && (kpis.topCosmetics || []).length === 0;
-
-  const dailyRevenue = kpis?.dailyRevenue || [];
-  const monthlyRevenue = kpis?.monthlyRevenue || [];
-  const topCosmetics = kpis?.topCosmetics || [];
-
-  // Pick day vs month series - length > 14 ⇒ monthly
-  const revenueSeries = dailyRevenue.length >= 2
-    ? dailyRevenue
-    : monthlyRevenue.length >= 1
-      ? monthlyRevenue
-      : dailyRevenue;
-
-  const showLocalSpinner = loading || (needsLocalCompute && localLoading);
+  })();
 
   return (
     <div>
       <PageHeader
         title="Báo cáo & thống kê"
-        description="Tổng quan doanh thu, khách hàng và tồn kho theo khoảng thời gian"
+        description="Tổng quan doanh thu, khách hàng, lịch hẹn và tồn kho theo khoảng thời gian"
       />
 
       {/* Filter bar */}
@@ -650,7 +502,7 @@ function AdminReports() {
           <span className="admin-form-help">
             Khoảng thời gian: <strong>{rangeLabel || '-'}</strong>
           </span>
-          <Button variant="ghost" size="sm" onClick={fetchReport} disabled={showLocalSpinner || !range}>
+          <Button variant="ghost" size="sm" onClick={fetchReport} disabled={loading || !range}>
             Tải lại
           </Button>
         </div>
@@ -663,7 +515,7 @@ function AdminReports() {
             description="Vui lòng chọn lại khoảng ngày hợp lệ."
           />
         </div>
-      ) : showLocalSpinner ? (
+      ) : loading ? (
         <div style={{ marginTop: 'var(--space-6)' }}>
           <LoadingState message="Đang tải báo cáo..." />
         </div>
@@ -675,38 +527,52 @@ function AdminReports() {
             onRetry={fetchReport}
           />
         </div>
-      ) : localError && !derivedKpis ? (
-        <div style={{ marginTop: 'var(--space-6)' }}>
-          <ErrorState
-            title="Không tải được dữ liệu bổ sung"
-            message={localError}
-            onRetry={fetchReport}
-          />
-        </div>
       ) : (
         <>
           {/* KPI grid */}
           <div className="admin-kpi-grid" style={{ marginTop: 'var(--space-6)' }}>
             <KpiCard
               label="Tổng doanh thu"
-              value={formatCurrency(kpis?.revenue || 0)}
+              value={formatCurrency(totalRevenue)}
               hint="Từ hóa đơn đã thanh toán"
               variant="success"
             />
             <KpiCard
               label="Tổng tồn mỹ phẩm"
-              value={kpis?.totalStock ?? 0}
-              hint="Số lượng sản phẩm trong kho"
+              value={totalStock}
+              hint={`Ngưỡng cảnh báo: ≤ ${lowStockThreshold || '-'}`}
             />
             <KpiCard
-              label="Khách hàng"
-              value={kpis?.customerCount ?? 0}
+              label="Tổng khách hàng"
+              value={totalCustomers}
               hint="Khách đã đăng ký"
             />
             <KpiCard
-              label="Lịch hẹn"
-              value={kpis?.appointmentCount ?? 0}
+              label="Lượt đặt lịch"
+              value={totalAppointments}
               hint="Trong khoảng thời gian"
+            />
+            <KpiCard
+              label="Khách hàng mới"
+              value={newCustomers}
+              hint="Trong khoảng thời gian"
+            />
+            <KpiCard
+              label="Đã thực hiện"
+              value={completedAppointments}
+              hint="Lịch hẹn hoàn thành"
+            />
+            <KpiCard
+              label="Sắp hết hàng"
+              value={lowStockCount}
+              hint={`≤ ${lowStockThreshold || '-'}`}
+              variant="warning"
+            />
+            <KpiCard
+              label="Hết hàng"
+              value={outOfStockCount}
+              hint="Cần nhập thêm"
+              variant="error"
             />
           </div>
 
@@ -714,7 +580,7 @@ function AdminReports() {
             <div className="card" style={{ marginTop: 'var(--space-6)' }}>
               <div className="card-body">
                 <EmptyState
-                  title="Không có dữ liệu phát sinh trong khoảng thời gian này."
+                  title="Không có dữ liệu phát sinh trong khoảng thời gian này"
                   description="Hãy thử chọn khoảng thời gian dài hơn hoặc quay lại sau khi có giao dịch mới."
                 />
               </div>
@@ -724,16 +590,12 @@ function AdminReports() {
               {/* Revenue over time */}
               <div className="card" style={{ marginTop: 'var(--space-6)' }}>
                 <div className="admin-table-meta">
-                  <span>
-                    Doanh thu theo {dailyRevenue.length >= 2 ? 'ngày' : 'tháng'}
-                  </span>
-                  <span>{formatCurrency(kpis?.revenue || 0)}</span>
+                  <span>Doanh thu theo {showTrendType}</span>
+                  <span>{formatCurrency(totalRevenue)}</span>
                 </div>
                 <div className="card-body" style={{ paddingTop: 'var(--space-4)' }}>
                   {revenueSeries.length === 0 ? (
-                    <EmptyState
-                      title="Không có dữ liệu phát sinh trong khoảng thời gian này."
-                    />
+                    <EmptyState title="Không có dữ liệu phát sinh trong khoảng thời gian này" />
                   ) : (
                     <LineChart
                       data={revenueSeries}
@@ -752,16 +614,13 @@ function AdminReports() {
                 <div className="card">
                   <div className="admin-table-meta">
                     <span>Tỷ trọng doanh thu</span>
-                    <span>Dịch vụ / Mỹ phẩm</span>
+                    <span>Dịch vụ trị liệu / Mỹ phẩm</span>
                   </div>
                   <div className="card-body">
-                    {(kpis?.serviceRevenue || 0) + (kpis?.cosmeticRevenue || 0) === 0 ? (
-                      <EmptyState title="Không có dữ liệu phát sinh trong khoảng thời gian này." />
+                    {serviceAmount + cosmeticAmount === 0 ? (
+                      <EmptyState title="Không có dữ liệu phát sinh trong khoảng thời gian này" />
                     ) : (
-                      <DonutChart
-                        service={kpis?.serviceRevenue || 0}
-                        cosmetic={kpis?.cosmeticRevenue || 0}
-                      />
+                      <DonutChart service={serviceAmount} cosmetic={cosmeticAmount} />
                     )}
                   </div>
                 </div>
@@ -773,10 +632,13 @@ function AdminReports() {
                   </div>
                   <div className="card-body">
                     {topCosmetics.length === 0 ? (
-                      <EmptyState title="Không có dữ liệu phát sinh trong khoảng thời gian này." />
+                      <EmptyState title="Không có dữ liệu phát sinh trong khoảng thời gian này" />
                     ) : (
                       <BarChart
-                        data={topCosmetics.map((c) => ({ name: c.name, value: c.revenue }))}
+                        data={topCosmetics.map((c) => ({
+                          name: c.name || c.cosmeticName || 'Sản phẩm',
+                          value: Number(c.revenue || 0),
+                        }))}
                         formatX={(v) => formatCurrency(v)}
                       />
                     )}
@@ -784,7 +646,7 @@ function AdminReports() {
                 </div>
               </div>
 
-              {/* Top cosmetics table - bonus context */}
+              {/* Top cosmetics detail table */}
               {topCosmetics.length > 0 && (
                 <div className="card" style={{ marginTop: 'var(--space-6)' }}>
                   <div className="admin-table-meta">
@@ -801,13 +663,58 @@ function AdminReports() {
                     </thead>
                     <tbody>
                       {topCosmetics.map((c, i) => (
-                        <tr key={`${c.name}-${i}`}>
+                        <tr key={`${c.cosmeticId || c.id || c.name}-${i}`}>
                           <td>
-                            <div className="admin-table-name">{c.name}</div>
+                            <div className="admin-table-name">{c.name || c.cosmeticName || 'Sản phẩm'}</div>
                           </td>
-                          <td style={{ textAlign: 'right' }}>{c.quantity}</td>
+                          <td style={{ textAlign: 'right' }}>{Number(c.quantity || 0)}</td>
                           <td style={{ textAlign: 'right' }}>
-                            <strong>{formatCurrency(c.revenue)}</strong>
+                            <strong>{formatCurrency(Number(c.revenue || 0))}</strong>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Inventory low/out-of-stock details */}
+              {(lowStockItems.length > 0 || outOfStockItems.length > 0) && (
+                <div className="card" style={{ marginTop: 'var(--space-6)' }}>
+                  <div className="admin-table-meta">
+                    <span>Chi tiết tồn kho cần chú ý</span>
+                    <span>
+                      Sắp hết {lowStockItems.length} · Hết hàng {outOfStockItems.length}
+                    </span>
+                  </div>
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Sản phẩm</th>
+                        <th style={{ textAlign: 'right' }}>Tồn kho</th>
+                        <th style={{ textAlign: 'right' }}>Trạng thái</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {outOfStockItems.map((it, i) => (
+                        <tr key={`out-${it.id || it.cosmeticId || i}`}>
+                          <td>
+                            <div className="admin-table-name">{it.name || 'Sản phẩm'}</div>
+                          </td>
+                          <td style={{ textAlign: 'right' }}>{Number(it.stockQuantity ?? 0)}</td>
+                          <td style={{ textAlign: 'right' }}>
+                            <StatusBadge variant="error">Hết hàng</StatusBadge>
+                          </td>
+                        </tr>
+                      ))}
+                      {lowStockItems.map((it, i) => (
+                        <tr key={`low-${it.id || it.cosmeticId || i}`}>
+                          <td>
+                            <div className="admin-table-name">{it.name || 'Sản phẩm'}</div>
+                          </td>
+                          <td style={{ textAlign: 'right' }}>{Number(it.stockQuantity ?? 0)}</td>
+                          <td style={{ textAlign: 'right' }}>
+                            <StatusBadge variant="warning">Sắp hết</StatusBadge>
                           </td>
                         </tr>
                       ))}
@@ -818,9 +725,9 @@ function AdminReports() {
             </>
           )}
 
-          {/* Footnote about revenue source */}
           <p className="admin-form-help" style={{ marginTop: 'var(--space-6)' }}>
             Doanh thu được tính từ các hóa đơn ở trạng thái <StatusBadge variant="success">Đã thanh toán</StatusBadge>.
+            {' '}Tồn kho là ảnh chụp hiện tại, không phụ thuộc khoảng thời gian đang chọn.
           </p>
         </>
       )}

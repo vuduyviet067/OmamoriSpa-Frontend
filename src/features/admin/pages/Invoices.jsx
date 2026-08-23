@@ -14,6 +14,7 @@ import {
 import { formatCurrency } from '@/utils/formatters';
 import useDebouncedValue from '@/hooks/useDebouncedValue';
 import {
+  cancelInvoice,
   createInvoiceFromAppointment,
   createRetailInvoice,
   extractApiError,
@@ -23,6 +24,7 @@ import {
   getCustomers,
   getInvoiceById,
   getInvoices,
+  isStaleStateError,
   payInvoice,
 } from '@/services/adminService';
 
@@ -33,12 +35,12 @@ const STATUS_FILTERS = [
   { id: 'all', label: 'Tất cả' },
   { id: 'pending', label: 'Chờ thanh toán' },
   { id: 'paid', label: 'Đã thanh toán' },
+  { id: 'cancelled', label: 'Đã hủy' },
 ];
 
 const PAYMENT_METHODS = [
   { value: 'CASH', label: 'Tiền mặt', hint: 'Khách thanh toán tại quầy' },
   { value: 'BANK_TRANSFER', label: 'Chuyển khoản', hint: 'Chuyển khoản ngân hàng' },
-  { value: 'CARD', label: 'Thẻ', hint: 'Quẹt thẻ / máy POS' },
 ];
 
 // =========================================================
@@ -84,49 +86,76 @@ const formatDateTime = (value) => {
 };
 
 const normaliseInvoice = (inv) => {
-  const id = inv.id ?? inv._id;
-  const statusRaw = pickString(inv.status, 'PENDING').toUpperCase();
-  const typeRaw = pickString(inv.type, inv.invoiceType, 'APPOINTMENT').toUpperCase();
+  const id = inv?.id ?? inv?._id ?? null;
+  const statusRaw = pickString(inv?.status, 'PENDING_PAYMENT').toUpperCase();
+  const items = Array.isArray(inv?.items) ? inv.items.map(normaliseLine) : [];
+
+  const serviceAmount = items
+    .filter((it) => it.itemType === 'SERVICE')
+    .reduce((sum, it) => sum + (it.subtotal || 0), 0);
+  const roomAmount = items
+    .filter((it) => it.itemType === 'ROOM')
+    .reduce((sum, it) => sum + (it.subtotal || 0), 0);
+  const cosmeticAmount = items
+    .filter((it) => it.itemType === 'COSMETIC')
+    .reduce((sum, it) => sum + (it.subtotal || 0), 0);
+
+  // Presentation-only short id (NOT a backend invoiceCode). Backend does
+  // NOT return invoiceCode; UI uses this for the "#" badge only.
+  const shortCode = id ? `INV-${String(id).slice(0, 8)}` : '—';
+
+  // customerName / customerPhone are not part of InvoiceResponse. We keep
+  // the customerId so admins have at least a stable handle, but we do NOT
+  // invent a display name from the invoice id — downstream views fall back
+  // to "ID khách hàng: <id>" when no real name is available.
+  const customerName = pickString(
+    inv?.customerName,
+    inv?.customer?.name,
+    inv?.customer?.fullName,
+  );
+  const customerPhone = pickString(
+    inv?.customerPhone,
+    inv?.customer?.phone,
+    inv?.customer?.phoneNumber,
+  );
+
   return {
     id,
-    code: pickString(inv.code, inv.invoiceCode, inv.invoiceNumber, id ? `INV-${id}` : '—'),
-    customerId: inv.customerId ?? inv.customer?.id ?? inv.customer?._id,
-    customerName: pickString(
-      inv.customerName,
-      inv.customer?.name,
-      inv.customer?.fullName,
-      inv.appointment?.customer?.name,
-      'Khách lẻ',
-    ),
-    customerPhone: pickString(
-      inv.customerPhone,
-      inv.customer?.phone,
-      inv.customer?.phoneNumber,
-      inv.appointment?.customer?.phone,
-    ),
-    appointmentId: inv.appointmentId ?? inv.appointment?.id ?? inv.appointment?._id,
-    type: typeRaw,
+    code: shortCode,
+    shortCode,
+    customerId: inv?.customerId ?? inv?.customer?.id ?? inv?.customer?._id ?? null,
+    customerName: customerName || '',
+    customerPhone,
+    appointmentId: inv?.appointmentId ?? inv?.appointment?.id ?? inv?.appointment?._id ?? null,
     status: statusRaw,
-    createdAt: inv.createdAt || inv.issuedAt || inv.date,
-    paidAt: inv.paidAt || inv.payment?.paidAt,
-    paymentMethod: pickString(inv.paymentMethod, inv.payment?.method, '').toUpperCase(),
-    serviceAmount: pickNumber(inv.serviceAmount, inv.serviceTotal),
-    roomAmount: pickNumber(inv.roomAmount, inv.roomTotal),
-    cosmeticAmount: pickNumber(inv.cosmeticAmount, inv.productAmount, inv.itemsAmount),
-    total: pickNumber(inv.totalAmount, inv.total, inv.amount, 0) ?? 0,
-    items: Array.isArray(inv.items) ? inv.items.map(normaliseLine) : [],
+    createdAt: inv?.createdAt || inv?.issuedAt || inv?.date || null,
+    paidAt: inv?.paidAt || null,
+    paymentMethod: pickString(inv?.paymentMethod, '').toUpperCase(),
+    serviceAmount,
+    roomAmount,
+    cosmeticAmount,
+    total: pickNumber(inv?.totalAmount, inv?.total, inv?.amount, 0) ?? 0,
+    items,
     raw: inv,
   };
 };
 
-const normaliseLine = (item) => ({
-  id: item.id ?? item._id,
-  name: pickString(item.name, item.serviceName, item.cosmeticName, item.productName, 'Sản phẩm'),
-  type: pickString(item.type, item.kind, 'SERVICE').toUpperCase(),
-  quantity: pickNumber(item.quantity, item.qty, 1) ?? 1,
-  unitPrice: pickNumber(item.unitPrice, item.price, 0) ?? 0,
-  total: pickNumber(item.total, item.amount, 0) ?? 0,
-});
+const normaliseLine = (item) => {
+  const quantity = pickNumber(item?.quantity, item?.qty, 1) ?? 1;
+  const unitPrice = pickNumber(item?.unitPrice, item?.price, 0) ?? 0;
+  const subtotal = Number(
+    pickNumber(item?.subtotal, item?.total, item?.amount, unitPrice * quantity) ?? 0,
+  );
+  return {
+    id: item?.id ?? item?._id ?? null,
+    itemType: pickString(item?.itemType, item?.type, 'SERVICE').toUpperCase(),
+    itemName: pickString(item?.itemName, item?.name, 'Sản phẩm'),
+    referenceId: item?.referenceId ?? item?.serviceId ?? item?.roomId ?? item?.cosmeticId ?? null,
+    quantity,
+    unitPrice,
+    subtotal,
+  };
+};
 
 const getStatusInfo = (status) => {
   switch (status) {
@@ -134,12 +163,7 @@ const getStatusInfo = (status) => {
       return { variant: 'success', label: 'Đã thanh toán' };
     case 'CANCELLED':
       return { variant: 'neutral', label: 'Đã hủy' };
-    case 'REFUNDED':
-      return { variant: 'info', label: 'Đã hoàn tiền' };
-    case 'FAILED':
-      return { variant: 'error', label: 'Thanh toán thất bại' };
-    case 'PENDING':
-    case 'UNPAID':
+    case 'PENDING_PAYMENT':
     default:
       return { variant: 'warning', label: 'Chờ thanh toán' };
   }
@@ -149,19 +173,7 @@ const getPaymentLabel = (method) => {
   switch (method) {
     case 'CASH': return 'Tiền mặt';
     case 'BANK_TRANSFER': return 'Chuyển khoản';
-    case 'CARD': return 'Thẻ';
     default: return method || '-';
-  }
-};
-
-const getTypeLabel = (type) => {
-  switch (type) {
-    case 'RETAIL':
-    case 'COSMETIC':
-      return 'Bán lẻ mỹ phẩm';
-    case 'APPOINTMENT':
-    default:
-      return 'Theo lịch hẹn';
   }
 };
 
@@ -254,6 +266,140 @@ function PaymentConfirmDialog({ target, method, onClose, onConfirm, loading }) {
 }
 
 // =========================================================
+// Invoice type / item-type label helpers (Vietnamese, single source of truth)
+// =========================================================
+const INVOICE_TYPE_LABELS = {
+  appointment: 'Theo lịch hẹn',
+  retail: 'Bán lẻ mỹ phẩm',
+};
+
+const getInvoiceTypeLabel = (invoice) => {
+  if (!invoice) return '-';
+  return invoice.appointmentId
+    ? INVOICE_TYPE_LABELS.appointment
+    : INVOICE_TYPE_LABELS.retail;
+};
+
+const ITEM_TYPE_LABELS = {
+  SERVICE: 'Dịch vụ',
+  ROOM: 'Phòng',
+  COSMETIC: 'Mỹ phẩm',
+};
+
+const getItemTypeLabel = (itemType) => ITEM_TYPE_LABELS[itemType] || itemType || '-';
+
+// =========================================================
+// Printable invoice block.
+// Rendered inside the detail modal so admins can preview it
+// before pressing "In hóa đơn" -> window.print().
+// All fields come from the SAME real `invoice` detail object
+// returned by GET /payments/{id} - no catalog recalculation.
+// =========================================================
+function InvoicePrintArea({ invoice }) {
+  if (!invoice) return null;
+  const statusLabel = getStatusInfo(invoice.status)?.label || '-';
+  const paymentLabel = invoice.paymentMethod
+    ? getPaymentLabel(invoice.paymentMethod)
+    : '-';
+
+  return (
+    <div className="invoice-print-area" aria-hidden="true">
+      <div className="invoice-print-header">
+        <div className="invoice-print-brand">OMAMORI SPA</div>
+        <div className="invoice-print-title">HÓA ĐƠN</div>
+      </div>
+
+      <div className="invoice-print-info">
+        <div className="invoice-print-row">
+          <span>Mã hóa đơn:</span>
+          <strong>{invoice.code || '-'}</strong>
+        </div>
+        <div className="invoice-print-row">
+          <span>Ngày tạo:</span>
+          <strong>{formatDateTime(invoice.createdAt)}</strong>
+        </div>
+        {invoice.paidAt && (
+          <div className="invoice-print-row">
+            <span>Ngày thanh toán:</span>
+            <strong>{formatDateTime(invoice.paidAt)}</strong>
+          </div>
+        )}
+        <div className="invoice-print-row">
+          <span>Trạng thái:</span>
+          <strong>{statusLabel}</strong>
+        </div>
+        <div className="invoice-print-row">
+          <span>Phương thức thanh toán:</span>
+          <strong>{paymentLabel}</strong>
+        </div>
+        <div className="invoice-print-row">
+          <span>Loại hóa đơn:</span>
+          <strong>{getInvoiceTypeLabel(invoice)}</strong>
+        </div>
+        <div className="invoice-print-row">
+          <span>Khách hàng:</span>
+          <strong>
+            {invoice.customerName
+              ? invoice.customerName
+              : invoice.customerId
+                ? `ID khách hàng: ${invoice.customerId}`
+                : '-'}
+          </strong>
+        </div>
+        {invoice.appointmentId && (
+          <div className="invoice-print-row">
+            <span>Mã lịch hẹn:</span>
+            <strong>#{invoice.appointmentId}</strong>
+          </div>
+        )}
+      </div>
+
+      <table className="invoice-print-table">
+        <thead>
+          <tr>
+            <th style={{ width: '6%' }}>STT</th>
+            <th>Nội dung</th>
+            <th style={{ width: '14%' }}>Loại</th>
+            <th style={{ width: '16%' }} className="invoice-print-num">Đơn giá</th>
+            <th style={{ width: '8%' }} className="invoice-print-num">SL</th>
+            <th style={{ width: '18%' }} className="invoice-print-num">Thành tiền</th>
+          </tr>
+        </thead>
+        <tbody>
+          {invoice.items.length === 0 ? (
+            <tr>
+              <td colSpan={6} className="invoice-print-empty">
+                Hóa đơn chưa có dòng sản phẩm nào.
+              </td>
+            </tr>
+          ) : (
+            invoice.items.map((item, idx) => (
+              <tr key={item.id || `${item.itemName}-${idx}`}>
+                <td>{idx + 1}</td>
+                <td>{item.itemName}</td>
+                <td>{getItemTypeLabel(item.itemType)}</td>
+                <td className="invoice-print-num">{formatCurrency(item.unitPrice)}</td>
+                <td className="invoice-print-num">{item.quantity}</td>
+                <td className="invoice-print-num">{formatCurrency(item.subtotal)}</td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+
+      <div className="invoice-print-total">
+        <span>TỔNG CỘNG:</span>
+        <strong>{formatCurrency(invoice.total)}</strong>
+      </div>
+
+      <div className="invoice-print-footer">
+        Cảm ơn quý khách đã sử dụng dịch vụ tại Omamori Spa.
+      </div>
+    </div>
+  );
+}
+
+// =========================================================
 // Invoice detail modal
 // =========================================================
 function InvoiceDetailModal({ isOpen, invoiceId, onClose, onPay }) {
@@ -283,7 +429,13 @@ function InvoiceDetailModal({ isOpen, invoiceId, onClose, onPay }) {
   if (!isOpen) return null;
 
   const status = invoice ? getStatusInfo(invoice.status) : null;
-  const canPay = invoice && (invoice.status === 'PENDING' || invoice.status === 'UNPAID' || invoice.status === 'FAILED');
+  const canPay = invoice && invoice.status === 'PENDING_PAYMENT';
+
+  const handlePrint = () => {
+    if (typeof window !== 'undefined' && typeof window.print === 'function') {
+      window.print();
+    }
+  };
 
   return (
     <Modal
@@ -307,7 +459,13 @@ function InvoiceDetailModal({ isOpen, invoiceId, onClose, onPay }) {
             </div>
             <div className="admin-confirm-grid-row">
               <span>Khách hàng</span>
-              <strong>{invoice.customerName}</strong>
+              <strong>
+                {invoice.customerName
+                  ? invoice.customerName
+                  : invoice.customerId
+                    ? `ID khách hàng: ${invoice.customerId}`
+                    : '—'}
+              </strong>
             </div>
             {invoice.customerPhone && (
               <div className="admin-confirm-grid-row">
@@ -317,7 +475,7 @@ function InvoiceDetailModal({ isOpen, invoiceId, onClose, onPay }) {
             )}
             <div className="admin-confirm-grid-row">
               <span>Loại hóa đơn</span>
-              <strong>{getTypeLabel(invoice.type)}</strong>
+              <strong>{invoice.appointmentId ? 'Theo lịch hẹn' : 'Bán lẻ mỹ phẩm'}</strong>
             </div>
             {invoice.appointmentId && (
               <div className="admin-confirm-grid-row">
@@ -356,14 +514,20 @@ function InvoiceDetailModal({ isOpen, invoiceId, onClose, onPay }) {
             ) : (
               <div className="admin-line-items">
                 {invoice.items.map((item) => (
-                  <div className="admin-line-item" key={item.id || item.name}>
+                  <div className="admin-line-item" key={item.id || item.itemName}>
                     <div className="admin-line-item-info">
-                      <div className="admin-line-item-name">{item.name}</div>
+                      <div className="admin-line-item-name">{item.itemName}</div>
                       <div className="admin-line-item-meta">
-                        {item.type === 'COSMETIC' ? 'Mỹ phẩm' : 'Dịch vụ'} - SL {item.quantity} - {formatCurrency(item.unitPrice)}
+                        {item.itemType === 'COSMETIC'
+                          ? 'Mỹ phẩm'
+                          : item.itemType === 'ROOM'
+                            ? 'Phòng'
+                            : 'Dịch vụ'}
+                        {' - SL '}{item.quantity}
+                        {' - '}{formatCurrency(item.unitPrice)}
                       </div>
                     </div>
-                    <div className="admin-line-item-total">{formatCurrency(item.total)}</div>
+                    <div className="admin-line-item-total">{formatCurrency(item.subtotal)}</div>
                   </div>
                 ))}
               </div>
@@ -371,19 +535,19 @@ function InvoiceDetailModal({ isOpen, invoiceId, onClose, onPay }) {
           </div>
 
           <div className="admin-summary">
-            {invoice.serviceAmount !== null && (
+            {invoice.serviceAmount > 0 && (
               <div className="admin-summary-row">
                 <span>Tiền dịch vụ</span>
                 <span>{formatCurrency(invoice.serviceAmount)}</span>
               </div>
             )}
-            {invoice.roomAmount !== null && (
+            {invoice.roomAmount > 0 && (
               <div className="admin-summary-row">
                 <span>Tiền phòng</span>
                 <span>{formatCurrency(invoice.roomAmount)}</span>
               </div>
             )}
-            {invoice.cosmeticAmount !== null && (
+            {invoice.cosmeticAmount > 0 && (
               <div className="admin-summary-row">
                 <span>Tiền mỹ phẩm</span>
                 <span>{formatCurrency(invoice.cosmeticAmount)}</span>
@@ -395,13 +559,20 @@ function InvoiceDetailModal({ isOpen, invoiceId, onClose, onPay }) {
             </div>
           </div>
 
-          {canPay && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
-              <Button onClick={() => onPay(invoice)}>Thanh toán</Button>
+          {invoice && (
+            <div className="invoice-detail-actions no-print" style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+              <Button variant="secondary" onClick={handlePrint}>
+                In hóa đơn
+              </Button>
+              {canPay && (
+                <Button onClick={() => onPay(invoice)}>Thanh toán</Button>
+              )}
             </div>
           )}
         </div>
       )}
+
+      <InvoicePrintArea invoice={invoice} />
     </Modal>
   );
 }
@@ -682,7 +853,16 @@ function RetailInvoiceModal({ isOpen, onClose, onCreated }) {
   const addLine = (cosmetic) => {
     const id = cosmetic.id ?? cosmetic._id;
     if (!id) return;
-    const stock = pickNumber(cosmetic.stock, cosmetic.quantity, 0) ?? 0;
+    // Backend (cosmetic-service) returns `stockQuantity` (computed live from
+    // CosmeticInventory - xem CosmeticResponse). Mock seed and other callers
+    // may use `stock` / `quantity`. Pick the first available so picker hien
+    // thi dung so luong that su.
+    const stock = pickNumber(
+      cosmetic.stockQuantity,
+      cosmetic.stock,
+      cosmetic.quantity,
+      0,
+    ) ?? 0;
     setLines((prev) => {
       const existing = prev.find((l) => l.cosmeticId === id);
       if (existing) {
@@ -732,13 +912,13 @@ function RetailInvoiceModal({ isOpen, onClose, onCreated }) {
     setSubmitting(true);
     setGlobalError(null);
     try {
+      // Backend looks up names/prices and snapshots them into InvoiceItem
+      // records. We intentionally do NOT send name/price/subtotal.
       const payload = {
-        type: 'RETAIL',
         customerId: customerId || undefined,
-        items: lines.map((l) => ({
+        cosmeticItems: lines.map((l) => ({
           cosmeticId: l.cosmeticId,
           quantity: l.quantity,
-          unitPrice: l.price,
         })),
       };
       const saved = await createRetailInvoice(payload);
@@ -801,7 +981,12 @@ function RetailInvoiceModal({ isOpen, onClose, onCreated }) {
             <div className="admin-pick-list">
               {filteredCosmetics.slice(0, 50).map((c) => {
                 const id = c.id ?? c._id;
-                const stock = pickNumber(c.stock, c.quantity, 0) ?? 0;
+                const stock = pickNumber(
+                  c.stockQuantity,
+                  c.stock,
+                  c.quantity,
+                  0,
+                ) ?? 0;
                 const line = lines.find((l) => l.cosmeticId === id);
                 return (
                   <button
@@ -941,6 +1126,10 @@ function AdminInvoices() {
   const [submittingPayment, setSubmittingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState(null);
 
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [submittingCancel, setSubmittingCancel] = useState(false);
+  const [cancelError, setCancelError] = useState(null);
+
   const [createFlow, setCreateFlow] = useState(null); // 'appointment' | 'retail' | null
   const [banner, setBanner] = useState(null);
   const [globalError, setGlobalError] = useState(null);
@@ -965,10 +1154,11 @@ function AdminInvoices() {
   const filtered = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
     return invoices.filter((inv) => {
-      if (statusFilter === 'pending' && inv.status !== 'PENDING' && inv.status !== 'UNPAID') return false;
+      if (statusFilter === 'pending' && inv.status !== 'PENDING_PAYMENT') return false;
       if (statusFilter === 'paid' && inv.status !== 'PAID') return false;
+      if (statusFilter === 'cancelled' && inv.status !== 'CANCELLED') return false;
       if (q) {
-        const target = `${inv.code} ${inv.customerName} ${inv.customerPhone}`.toLowerCase();
+        const target = `${inv.code} ${inv.customerName} ${inv.customerPhone} ${inv.customerId || ''}`.toLowerCase();
         if (!target.includes(q)) return false;
       }
       return true;
@@ -978,11 +1168,13 @@ function AdminInvoices() {
   const totals = useMemo(() => {
     let pending = 0;
     let paid = 0;
+    let cancelled = 0;
     invoices.forEach((inv) => {
-      if (inv.status === 'PENDING' || inv.status === 'UNPAID') pending += 1;
+      if (inv.status === 'PENDING_PAYMENT') pending += 1;
       if (inv.status === 'PAID') paid += 1;
+      if (inv.status === 'CANCELLED') cancelled += 1;
     });
-    return { pending, paid };
+    return { pending, paid, cancelled };
   }, [invoices]);
 
   const openPayment = (invoice) => {
@@ -1004,24 +1196,98 @@ function AdminInvoices() {
     if (!paymentTarget) return;
     setSubmittingPayment(true);
     setPaymentError(null);
+    const targetId = paymentTarget.id;
     try {
       const saved = await payInvoice(paymentTarget.id, paymentMethod);
-      setInvoices((prev) =>
-        prev.map((inv) => (inv.id === paymentTarget.id
-          ? normaliseInvoice(saved && typeof saved === 'object'
-              ? saved
-              : { ...inv.raw, status: 'PAID', paidAt: new Date().toISOString(), paymentMethod })
-          : inv)),
-      );
+      const normalised = saved && typeof saved === 'object'
+        ? normaliseInvoice(saved)
+        : {
+          ...paymentTarget,
+          status: 'PAID',
+          paidAt: new Date().toISOString(),
+          paymentMethod,
+        };
+      setInvoices((prev) => prev.map((inv) => (inv.id === normalised.id ? normalised : inv)));
       setPaymentTarget(null);
       setShowPaymentConfirm(false);
-      setBanner({ type: 'success', text: `Đã thanh toán hóa đơn ${paymentTarget.code}.` });
+      setBanner({ type: 'success', text: `Đã thanh toán hóa đơn ${normalised.code}.` });
       // Backend deducts stock on payment - refresh inventory if we visit it next.
       load();
     } catch (err) {
-      setPaymentError(extractApiError(err, 'Không thể xác nhận thanh toán.'));
+      // Backend may report the invoice has already moved out of PENDING_PAYMENT
+      // (e.g. another admin/session confirmed it). Refresh the list and the
+      // detail modal so the UI catches up with backend state, and surface the
+      // backend message verbatim instead of a generic fallback.
+      if (isStaleStateError(err)) {
+        setDetailId(null);
+        setShowPaymentConfirm(false);
+        setPaymentTarget(null);
+        setPaymentError(null);
+        setBanner({
+          type: 'warning',
+          text: extractApiError(
+            err,
+            'Trạng thái hóa đơn đã thay đổi. Đang đồng bộ lại danh sách.',
+          ),
+        });
+        await load();
+        // If the offending invoice had a detail modal open, re-open it on the
+        // freshly fetched object so the user sees the current state.
+        if (targetId) setDetailId(targetId);
+      } else {
+        setPaymentError(extractApiError(err, 'Không thể xác nhận thanh toán.'));
+      }
     } finally {
       setSubmittingPayment(false);
+    }
+  };
+
+  const openCancel = (invoice) => {
+    setCancelTarget(invoice);
+    setCancelError(null);
+  };
+
+  const closeCancel = () => {
+    if (submittingCancel) return;
+    setCancelTarget(null);
+    setCancelError(null);
+  };
+
+  const performCancel = async () => {
+    if (!cancelTarget) return;
+    setSubmittingCancel(true);
+    setCancelError(null);
+    const targetId = cancelTarget.id;
+    try {
+      const saved = await cancelInvoice(cancelTarget.id);
+      const normalised = saved && typeof saved === 'object'
+        ? normaliseInvoice(saved)
+        : { ...cancelTarget, status: 'CANCELLED', paidAt: null };
+      setInvoices((prev) => prev.map((inv) => (inv.id === normalised.id ? normalised : inv)));
+      setBanner({ type: 'success', text: `Đã hủy hóa đơn ${normalised.code}.` });
+      setCancelTarget(null);
+      load();
+    } catch (err) {
+      if (isStaleStateError(err)) {
+        // Invoice already moved out of PENDING_PAYMENT (paid by someone else,
+        // or cancelled by another session) - sync local state with backend.
+        setDetailId(null);
+        setCancelTarget(null);
+        setCancelError(null);
+        setBanner({
+          type: 'warning',
+          text: extractApiError(
+            err,
+            'Trạng thái hóa đơn đã thay đổi. Đang đồng bộ lại danh sách.',
+          ),
+        });
+        await load();
+        if (targetId) setDetailId(targetId);
+      } else {
+        setCancelError(extractApiError(err, 'Không thể hủy hóa đơn.'));
+      }
+    } finally {
+      setSubmittingCancel(false);
     }
   };
 
@@ -1182,7 +1448,8 @@ function AdminInvoices() {
               <tbody>
                 {filtered.map((inv) => {
                   const status = getStatusInfo(inv.status);
-                  const canPay = inv.status === 'PENDING' || inv.status === 'UNPAID';
+                  const canPay = inv.status === 'PENDING_PAYMENT';
+                  const canCancel = inv.status === 'PENDING_PAYMENT';
                   return (
                     <tr key={inv.id}>
                       <td>
@@ -1191,8 +1458,13 @@ function AdminInvoices() {
                           <div className="admin-table-sub">Lịch hẹn #{inv.appointmentId}</div>
                         )}
                       </td>
-                      <td>{inv.customerName}</td>
-                      <td>{getTypeLabel(inv.type)}</td>
+                      <td>
+                        <div>{inv.customerName}</div>
+                        {inv.customerId && (
+                          <div className="admin-table-sub">ID: {inv.customerId}</div>
+                        )}
+                      </td>
+                      <td>{inv.appointmentId ? 'Theo lịch hẹn' : 'Bán lẻ mỹ phẩm'}</td>
                       <td>{formatDate(inv.createdAt)}</td>
                       <td><strong>{formatCurrency(inv.total)}</strong></td>
                       <td>
@@ -1221,6 +1493,15 @@ function AdminInvoices() {
                               Thanh toán
                             </button>
                           )}
+                          {canCancel && (
+                            <button
+                              type="button"
+                              className="admin-table-action-btn admin-table-action-btn--danger"
+                              onClick={() => openCancel(inv)}
+                            >
+                              Hủy
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1232,7 +1513,8 @@ function AdminInvoices() {
             <div className="admin-table-cards">
               {filtered.map((inv) => {
                 const status = getStatusInfo(inv.status);
-                const canPay = inv.status === 'PENDING' || inv.status === 'UNPAID';
+                const canPay = inv.status === 'PENDING_PAYMENT';
+                const canCancel = inv.status === 'PENDING_PAYMENT';
                 return (
                   <div className="admin-table-card-row" key={`m-${inv.id}`}>
                     <div className="admin-table-card-row-top">
@@ -1240,13 +1522,16 @@ function AdminInvoices() {
                         <div className="admin-table-card-row-title">{inv.code}</div>
                         <div className="admin-table-card-row-sub">
                           {inv.customerName}
-                          {inv.customerPhone ? ` - ${inv.customerPhone}` : ''}
+                          {inv.customerId ? ` - ID: ${inv.customerId}` : ''}
                         </div>
+                        {inv.customerPhone && (
+                          <div className="admin-table-card-row-sub">{inv.customerPhone}</div>
+                        )}
                       </div>
                       <StatusBadge variant={status.variant}>{status.label}</StatusBadge>
                     </div>
                     <div className="admin-table-card-row-meta">
-                      <span>Loại: {getTypeLabel(inv.type)}</span>
+                      <span>Loại: {inv.appointmentId ? 'Theo lịch hẹn' : 'Bán lẻ mỹ phẩm'}</span>
                       <span>Ngày: {formatDate(inv.createdAt)}</span>
                     </div>
                     <div className="admin-line-item-total" style={{ fontSize: 'var(--text-base)' }}>
@@ -1267,6 +1552,15 @@ function AdminInvoices() {
                           onClick={() => openPayment(inv)}
                         >
                           Thanh toán
+                        </button>
+                      )}
+                      {canCancel && (
+                        <button
+                          type="button"
+                          className="admin-table-action-btn admin-table-action-btn--danger"
+                          onClick={() => openCancel(inv)}
+                        >
+                          Hủy
                         </button>
                       )}
                     </div>
@@ -1313,6 +1607,30 @@ function AdminInvoices() {
         <div className="admin-banner admin-banner--error" role="alert" style={{ position: 'fixed', bottom: 24, right: 24 }}>
           <span>{paymentError}</span>
           <button type="button" onClick={() => setPaymentError(null)} aria-label="Đóng">×</button>
+        </div>
+      )}
+
+      <ConfirmDialog
+        isOpen={!!cancelTarget}
+        onClose={submittingCancel ? () => {} : closeCancel}
+        onConfirm={performCancel}
+        title="Xác nhận hủy hóa đơn"
+        message={
+          cancelTarget ? (
+            <span>
+              Hủy hóa đơn <strong>{cancelTarget.code}</strong>? Hành động này
+              không thể hoàn tác.
+            </span>
+          ) : null
+        }
+        confirmText="Hủy hóa đơn"
+        variant="danger"
+        loading={submittingCancel}
+      />
+      {cancelError && (
+        <div className="admin-banner admin-banner--error" role="alert" style={{ position: 'fixed', bottom: 24, right: 24 }}>
+          <span>{cancelError}</span>
+          <button type="button" onClick={() => setCancelError(null)} aria-label="Đóng">×</button>
         </div>
       )}
 

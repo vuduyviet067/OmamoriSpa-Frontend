@@ -5,7 +5,7 @@ import { Button, Input } from '@/components/common';
 import './LoginPage.css';
 
 function LoginPage() {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [errors, setErrors] = useState({});
@@ -21,8 +21,10 @@ function LoginPage() {
   const validate = () => {
     const newErrors = {};
 
-    if (!username.trim()) {
-      newErrors.username = 'Vui lòng nhập tên đăng nhập';
+    if (!email.trim()) {
+      newErrors.email = 'Vui lòng nhập email';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      newErrors.email = 'Email không đúng định dạng';
     }
 
     if (!password) {
@@ -42,8 +44,8 @@ function LoginPage() {
     setIsLoading(true);
 
     try {
-      const response = await login(username, password);
-      
+      const response = await login(email.trim().toLowerCase(), password);
+
       // Remember me functionality
       if (rememberMe) {
         localStorage.setItem('omamori_remember', 'true');
@@ -52,7 +54,7 @@ function LoginPage() {
       }
 
       // Redirect based on role
-      const redirectPath = from || REDIRECT_PATHS[response.user.role] || '/';
+      const redirectPath = from || REDIRECT_PATHS[response.user?.role] || '/';
       navigate(redirectPath, { replace: true });
     } catch (error) {
       if (error.response?.data?.message) {
@@ -131,13 +133,13 @@ function LoginPage() {
             <form onSubmit={handleSubmit} className="auth-form">
               <div className="form-fields">
                 <Input
-                  label="Tên đăng nhập"
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Nhập tên đăng nhập"
-                  error={errors.username}
-                  autoComplete="username"
+                  label="Email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="email@example.com"
+                  error={errors.email}
+                  autoComplete="email"
                 />
 
                 <Input
@@ -181,24 +183,6 @@ function LoginPage() {
                   Đăng ký ngay
                 </Link>
               </p>
-            </div>
-
-            <div className="auth-demo-accounts">
-              <p className="demo-title">Tài khoản demo để thử nghiệm:</p>
-              <div className="demo-accounts">
-                <div className="demo-account">
-                  <span className="demo-role">Khách hàng:</span>
-                  <code>khachhang</code> / <code>Customer123</code>
-                </div>
-                <div className="demo-account">
-                  <span className="demo-role">Kỹ thuật viên:</span>
-                  <code>kythuatvien</code> / <code>Therapist123</code>
-                </div>
-                <div className="demo-account">
-                  <span className="demo-role">Quản trị viên:</span>
-                  <code>quantrivien</code> / <code>Admin123</code>
-                </div>
-              </div>
             </div>
           </div>
         </div>

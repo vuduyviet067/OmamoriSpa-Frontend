@@ -2,12 +2,11 @@
 import apiClient from './api';
 import { therapistMock } from '@/mocks';
 
-// Appointment status enum - mirrors customer side for shared understanding.
+// Appointment status enum - mirrors backend enum AppointmentStatus exactly.
 export const APPOINTMENT_STATUS = {
   PENDING: 'PENDING',
   CONFIRMED: 'CONFIRMED',
-  ACCEPTED: 'ACCEPTED',
-  IN_TREATMENT: 'IN_TREATMENT',
+  IN_PROGRESS: 'IN_PROGRESS',
   COMPLETED: 'COMPLETED',
   CANCELLED: 'CANCELLED',
 };
@@ -16,8 +15,7 @@ export const APPOINTMENT_STATUS = {
 export const APPOINTMENT_STATUS_LABELS = {
   [APPOINTMENT_STATUS.PENDING]: 'Chờ xác nhận',
   [APPOINTMENT_STATUS.CONFIRMED]: 'Đã xác nhận',
-  [APPOINTMENT_STATUS.ACCEPTED]: 'Đã tiếp nhận',
-  [APPOINTMENT_STATUS.IN_TREATMENT]: 'Đang trị liệu',
+  [APPOINTMENT_STATUS.IN_PROGRESS]: 'Đang trị liệu',
   [APPOINTMENT_STATUS.COMPLETED]: 'Hoàn thành',
   [APPOINTMENT_STATUS.CANCELLED]: 'Đã hủy',
 };
@@ -26,24 +24,34 @@ export const APPOINTMENT_STATUS_LABELS = {
 export const APPOINTMENT_STATUS_VARIANTS = {
   [APPOINTMENT_STATUS.PENDING]: 'warning',
   [APPOINTMENT_STATUS.CONFIRMED]: 'info',
-  [APPOINTMENT_STATUS.ACCEPTED]: 'info',
-  [APPOINTMENT_STATUS.IN_TREATMENT]: 'success',
+  [APPOINTMENT_STATUS.IN_PROGRESS]: 'success',
   [APPOINTMENT_STATUS.COMPLETED]: 'success',
   [APPOINTMENT_STATUS.CANCELLED]: 'error',
 };
 
 // Allowed forward transitions for the therapist state machine.
-// Therapists can only move: CONFIRMED -> ACCEPTED -> IN_TREATMENT -> COMPLETED.
+// FE-only responsibility is PENDING -> CONFIRMED and CONFIRMED -> IN_PROGRESS.
+// IN_PROGRESS -> COMPLETED is gated by the treatment journal (backend).
 export const ALLOWED_TRANSITIONS = {
-  [APPOINTMENT_STATUS.PENDING]: [APPOINTMENT_STATUS.ACCEPTED],
-  [APPOINTMENT_STATUS.CONFIRMED]: [APPOINTMENT_STATUS.ACCEPTED],
-  [APPOINTMENT_STATUS.ACCEPTED]: [APPOINTMENT_STATUS.IN_TREATMENT],
-  [APPOINTMENT_STATUS.IN_TREATMENT]: [APPOINTMENT_STATUS.COMPLETED],
+  [APPOINTMENT_STATUS.PENDING]: [
+    APPOINTMENT_STATUS.CONFIRMED,
+  ],
+
+
+  [APPOINTMENT_STATUS.CONFIRMED]: [
+    APPOINTMENT_STATUS.IN_PROGRESS,
+  ],
+
+
+  // COMPLETED phải đi qua lưu hồ sơ trị liệu.
+  [APPOINTMENT_STATUS.IN_PROGRESS]: [],
+
+
   [APPOINTMENT_STATUS.COMPLETED]: [],
   [APPOINTMENT_STATUS.CANCELLED]: [],
 };
 
-const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA === 'true';
+const USE_MOCK = import.meta.env.VITE_USE_MOCK_THERAPIST === 'true';
 
 // In-memory mock state (persists across renders within the session).
 let _mockAppointments = therapistMock.appointments.map((apt) => ({ ...apt }));
@@ -65,18 +73,155 @@ const _delay = (ms = 300) => new Promise((r) => setTimeout(r, ms));
 
 const extractList = (payload) => {
   if (Array.isArray(payload)) return payload;
-  if (payload && Array.isArray(payload.data)) return payload.data;
-  if (payload && Array.isArray(payload.items)) return payload.items;
-  if (payload && Array.isArray(payload.results)) return payload.results;
+
+
+  if (
+    payload &&
+    Array.isArray(payload.result)
+  ) {
+    return payload.result;
+  }
+
+
+  if (
+    payload &&
+    Array.isArray(payload.data)
+  ) {
+    return payload.data;
+  }
+
+
+  if (
+    payload &&
+    Array.isArray(payload.items)
+  ) {
+    return payload.items;
+  }
+
+
+  if (
+    payload &&
+    Array.isArray(payload.results)
+  ) {
+    return payload.results;
+  }
+
+
   return [];
 };
 
 const extractObject = (payload) => {
-  if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
-    if (payload.data && typeof payload.data === 'object') return payload.data;
-    return payload;
+  if (
+    !payload ||
+    typeof payload !== 'object' ||
+    Array.isArray(payload)
+  ) {
+    return null;
   }
-  return null;
+
+
+  if (
+    payload.result &&
+    typeof payload.result === 'object' &&
+    !Array.isArray(payload.result)
+  ) {
+    return payload.result;
+  }
+
+
+  if (
+    payload.data &&
+    typeof payload.data === 'object' &&
+    !Array.isArray(payload.data)
+  ) {
+    return payload.data;
+  }
+
+
+  return payload;
+};
+
+
+const normalizeAppointment = (appointment) => {
+  if (!appointment || typeof appointment !== 'object') {
+    return null;
+  }
+
+
+  const rawAppointmentTime =
+    appointment.appointmentTime || '';
+
+
+  const [datePart = '', timePart = ''] =
+    typeof rawAppointmentTime === 'string'
+      ? rawAppointmentTime.split('T')
+      : ['', ''];
+
+
+  const date =
+    appointment.date ??
+    datePart ??
+    '';
+
+
+  const startTime =
+    appointment.startTime ??
+    appointment.time ??
+    (timePart ? timePart.substring(0, 5) : '');
+
+
+  return {
+    ...appointment,
+
+
+    date,
+    startTime,
+    time: appointment.time ?? startTime,
+
+
+    price:
+      appointment.price ??
+      appointment.totalAmount ??
+      appointment.servicePrice ??
+      0,
+
+
+    note:
+      appointment.note ??
+      appointment.notes ??
+      '',
+
+
+    notes:
+      appointment.notes ??
+      appointment.note ??
+      '',
+
+
+    service:
+      appointment.service ?? {
+        id: appointment.serviceId,
+        name: appointment.serviceName ?? 'Dịch vụ',
+        price: appointment.servicePrice ?? 0,
+      },
+
+
+    room:
+      appointment.room ?? {
+        id: appointment.roomId,
+        name: appointment.roomName ?? 'Phòng',
+        price: appointment.roomPrice ?? 0,
+      },
+
+
+    therapist:
+      appointment.therapist ??
+      (
+        appointment.therapistId
+          ? { id: appointment.therapistId }
+          : null
+      ),
+  };
 };
 
 /**
@@ -103,8 +248,12 @@ export const getMySchedule = async (params = {}) => {
     await _delay(200);
     return [..._mockAppointments];
   }
-  const response = await apiClient.get('/appointments/my', { params });
-  return extractList(response.data);
+  const response = await apiClient.get('/appointments/therapist/me', { params });
+
+
+  return extractList(response.data)
+    .map(normalizeAppointment)
+    .filter(Boolean);
 };
 
 // ─── GET APPOINTMENT BY ID ────────────────────────────────────────────────────
@@ -120,8 +269,12 @@ export const getAppointmentById = async (appointmentId) => {
     }
     return { ...apt };
   }
-  const response = await apiClient.get(`/appointments/${appointmentId}`);
-  return extractObject(response.data);
+  const response = await apiClient.get(`/appointments/therapist/me/${appointmentId}`);
+
+
+  return normalizeAppointment(
+    extractObject(response.data)
+  );
 };
 
 // ─── UPDATE APPOINTMENT STATUS ────────────────────────────────────────────────
@@ -144,10 +297,14 @@ export const updateAppointmentStatus = async (appointmentId, status) => {
     return _updateApt(appointmentId, { status });
   }
   const response = await apiClient.patch(
-    `/appointments/${appointmentId}/status`,
+    `/appointments/therapist/me/${appointmentId}/status`,
     { status }
   );
-  return extractObject(response.data);
+
+
+  return normalizeAppointment(
+    extractObject(response.data)
+  );
 };
 
 // ─── GET CUSTOMER TREATMENT HISTORY ───────────────────────────────────────────
@@ -202,9 +359,20 @@ export const saveTreatmentJournal = async (appointmentId, payload) => {
     return entry;
   }
   const response = await apiClient.post(
-    `/therapists/appointments/${appointmentId}/treatment`,
+    `/appointments/therapist/me/${appointmentId}/therapy-record`,
     payload
   );
+
+  return extractObject(response.data);
+};
+
+// ─── GET TREATMENT RECORD ────────────────────────────────────────────────────
+
+export const getTreatmentRecord = async (appointmentId) => {
+  const response = await apiClient.get(
+    `/appointments/therapist/me/${appointmentId}/therapy-record`
+  );
+
   return extractObject(response.data);
 };
 
@@ -215,8 +383,12 @@ export const getMyProfile = async () => {
     await _delay(150);
     return { ...therapistMock.profile };
   }
-  const response = await apiClient.get('/therapists/profile');
-  return extractObject(response.data);
+  const response = await apiClient.get('/profiles/me');
+  const profile = response.data?.result ?? response.data;
+  return {
+    ...profile,
+    name: profile?.fullName ?? '',
+  };
 };
 
 // ─── UPDATE MY PROFILE ───────────────────────────────────────────────────────
@@ -227,8 +399,12 @@ export const updateMyProfile = async (payload) => {
     Object.assign(therapistMock.profile, payload);
     return { ...therapistMock.profile };
   }
-  const response = await apiClient.put('/therapists/profile', payload);
-  return extractObject(response.data);
+  const response = await apiClient.put('/profiles/me', payload);
+  const profile = response.data?.result ?? response.data;
+  return {
+    ...profile,
+    name: profile?.fullName ?? '',
+  };
 };
 
 /**
@@ -246,6 +422,7 @@ export default {
   getCustomerTreatmentHistory,
   getPrescribableCosmetics,
   saveTreatmentJournal,
+  getTreatmentRecord,
   getMyProfile,
   updateMyProfile,
   APPOINTMENT_STATUS,

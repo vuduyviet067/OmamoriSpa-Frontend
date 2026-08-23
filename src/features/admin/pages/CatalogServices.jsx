@@ -20,23 +20,17 @@ import {
   updateService,
 } from '@/services/adminService';
 
-const formatStatus = (service) => {
-  if (typeof service.active === 'boolean') return service.active;
-  if (typeof service.isActive === 'boolean') return service.isActive;
-  if (typeof service.enabled === 'boolean') return service.enabled;
-  const s = (service.status || '').toString().toUpperCase();
-  if (s === 'INACTIVE' || s === 'DISABLED') return false;
-  return true;
-};
-
 function ServiceForm({ isOpen, mode, initial, onClose, onSaved }) {
   const isEdit = mode === 'edit';
+  // Backend `isActive` is server-controlled (soft-deactivated by DELETE,
+  // no re-activate endpoint). The form therefore never sends an active
+  // flag and only edits content fields.
   const [form, setForm] = useState({
     name: '',
     price: '',
     duration: '',
     description: '',
-    active: true,
+    category: '',
   });
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -45,18 +39,29 @@ function ServiceForm({ isOpen, mode, initial, onClose, onSaved }) {
   useEffect(() => {
     if (!isOpen) return;
     if (initial) {
+      const initialDuration =
+        initial.durationMinutes ?? initial.duration ?? '';
       setForm({
         name: initial.name || '',
-        price: initial.price !== undefined && initial.price !== null ? String(initial.price) : '',
+        price:
+          initial.price !== undefined && initial.price !== null
+            ? String(initial.price)
+            : '',
         duration:
-          initial.duration !== undefined && initial.duration !== null
-            ? String(initial.duration ?? initial.durationMinutes ?? '')
+          initialDuration !== undefined && initialDuration !== null
+            ? String(initialDuration)
             : '',
         description: initial.description || initial.note || '',
-        active: formatStatus(initial),
+        category: initial.category || '',
       });
     } else {
-      setForm({ name: '', price: '', duration: '', description: '', active: true });
+      setForm({
+        name: '',
+        price: '',
+        duration: '',
+        description: '',
+        category: '',
+      });
     }
     setErrors({});
     setGlobalError(null);
@@ -97,12 +102,14 @@ function ServiceForm({ isOpen, mode, initial, onClose, onSaved }) {
     setSubmitting(true);
     setGlobalError(null);
     try {
+      // Backend content-only payload: name, category, price,
+      // durationMinutes, description. No isActive / active on the wire.
       const payload = {
         name: form.name.trim(),
+        category: form.category?.trim() || null,
         price: Number(form.price),
-        duration: Number(form.duration),
-        description: form.description.trim() || undefined,
-        active: !!form.active,
+        durationMinutes: Number(form.duration),
+        description: form.description?.trim() || null,
       };
       let saved;
       if (isEdit && initial?.id) {
@@ -182,22 +189,6 @@ function ServiceForm({ isOpen, mode, initial, onClose, onSaved }) {
             rows={3}
           />
         </div>
-        <label
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-2)',
-            fontSize: 'var(--text-sm)',
-            cursor: 'pointer',
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={!!form.active}
-            onChange={handleChange('active')}
-          />
-          Đang hoạt động (hiển thị cho khách hàng chọn lịch)
-        </label>
       </form>
     </Modal>
   );
@@ -294,29 +285,6 @@ function AdminCatalogServices() {
     });
   };
 
-  const toggleConfirm = (svc) => {
-    const active = formatStatus(svc);
-    setConfirm({
-      title: active ? 'Ngừng hoạt động dịch vụ' : 'Kích hoạt dịch vụ',
-      message: `Bạn có chắc chắn muốn ${active ? 'ngừng hoạt động' : 'kích hoạt'} "${svc.name}"?`,
-      onConfirm: async () => {
-        setConfirmLoading(true);
-        try {
-          const id = svc.id ?? svc._id;
-          await updateService(id, { ...svc, active: !active });
-          setServices((prev) =>
-            prev.map((it) => ((it.id ?? it._id) === id ? { ...it, active: !active } : it)),
-          );
-          setConfirm(null);
-        } catch (err) {
-          setGlobalError(extractApiError(err, 'Không thể cập nhật trạng thái.'));
-        } finally {
-          setConfirmLoading(false);
-        }
-      },
-    });
-  };
-
   return (
     <div>
       <PageHeader
@@ -378,7 +346,6 @@ function AdminCatalogServices() {
               </thead>
               <tbody>
                 {filtered.map((svc) => {
-                  const active = formatStatus(svc);
                   return (
                     <tr key={svc.id ?? svc._id}>
                       <td>
@@ -394,9 +361,7 @@ function AdminCatalogServices() {
                       <td>{formatDuration(svc.duration ?? svc.durationMinutes ?? 0)}</td>
                       <td>{formatCurrency(svc.price)}</td>
                       <td>
-                        <StatusBadge status={active ? 'success' : 'neutral'}>
-                          {active ? 'Hoạt động' : 'Ngừng'}
-                        </StatusBadge>
+                        <StatusBadge status="success">Đang hoạt động</StatusBadge>
                       </td>
                       <td>
                         <div className="admin-table-actions">
@@ -406,13 +371,6 @@ function AdminCatalogServices() {
                             onClick={() => handleEdit(svc)}
                           >
                             Sửa
-                          </button>
-                          <button
-                            type="button"
-                            className="admin-table-action-btn"
-                            onClick={() => toggleConfirm(svc)}
-                          >
-                            {active ? 'Ngừng' : 'Kích hoạt'}
                           </button>
                           <button
                             type="button"
@@ -430,14 +388,11 @@ function AdminCatalogServices() {
             </table>
             <div className="admin-table-cards">
               {filtered.map((svc) => {
-                const active = formatStatus(svc);
                 return (
                   <div className="admin-table-card-row" key={`m-${svc.id ?? svc._id}`}>
                     <div className="admin-table-card-row-top">
                       <div className="admin-table-card-row-title">{svc.name}</div>
-                      <StatusBadge status={active ? 'success' : 'neutral'}>
-                        {active ? 'Hoạt động' : 'Ngừng'}
-                      </StatusBadge>
+                      <StatusBadge status="success">Đang hoạt động</StatusBadge>
                     </div>
                     {svc.description && (
                       <div className="admin-table-card-row-sub">{svc.description}</div>
@@ -453,13 +408,6 @@ function AdminCatalogServices() {
                         onClick={() => handleEdit(svc)}
                       >
                         Sửa
-                      </button>
-                      <button
-                        type="button"
-                        className="admin-table-action-btn"
-                        onClick={() => toggleConfirm(svc)}
-                      >
-                        {active ? 'Ngừng' : 'Kích hoạt'}
                       </button>
                       <button
                         type="button"

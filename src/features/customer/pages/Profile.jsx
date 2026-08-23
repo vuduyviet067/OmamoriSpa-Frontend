@@ -5,7 +5,6 @@ import { getMyProfile, updateMyProfile } from '@/services/customerService';
 import { Input, LoadingState } from '@/components/common';
 import useFlashMessage from '@/hooks/useFlashMessage';
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_REGEX = /^(0[0-9]{9})$/;
 
 const getInitials = (name) => {
@@ -28,6 +27,12 @@ function CustomerProfile() {
   const [error, setError] = useState(null);
   const [errors, setErrors] = useState({});
   const [isEditing, setIsEditing] = useState(false);
+  const [profileMeta, setProfileMeta] = useState({
+    dateOfBirth: null,
+    gender: null,
+    address: '',
+    avatarUrl: null,
+  });
 
   const [original, setOriginal] = useState({
     name: '',
@@ -53,11 +58,20 @@ function CustomerProfile() {
     setError(null);
     try {
       const data = await getMyProfile();
+
       const next = {
-        name: data?.name ?? user?.name ?? '',
-        email: data?.email ?? user?.email ?? '',
+        name: data?.fullName ?? data?.name ?? user?.name ?? '',
+        email: user?.email ?? '',
         phone: data?.phone ?? user?.phone ?? '',
       };
+
+      setProfileMeta({
+        dateOfBirth: data?.dateOfBirth ?? null,
+        gender: data?.gender ?? null,
+        address: data?.address ?? '',
+        avatarUrl: data?.avatarUrl ?? null,
+      });
+
       setOriginal(next);
       setFormData(next);
     } catch (err) {
@@ -80,11 +94,10 @@ function CustomerProfile() {
     }
   };
 
-  const isDirty = useMemo(() => (
-    formData.name !== original.name
-    || formData.email !== original.email
-    || formData.phone !== original.phone
-  ), [formData, original]);
+  const isDirty = useMemo(
+    () => formData.phone !== original.phone,
+    [formData.phone, original.phone]
+  );
 
   const handleChange = (field) => (e) => {
     const value = e.target.value;
@@ -97,22 +110,11 @@ function CustomerProfile() {
   const validate = () => {
     const newErrors = {};
 
-    if (!formData.name.trim()) {
-      newErrors.name = 'Vui lòng nhập họ và tên';
-    } else if (formData.name.trim().length < 2) {
-      newErrors.name = 'Họ và tên phải có ít nhất 2 ký tự';
-    }
-
-    if (!formData.email.trim()) {
-      newErrors.email = 'Vui lòng nhập email';
-    } else if (!EMAIL_REGEX.test(formData.email.trim())) {
-      newErrors.email = 'Email không đúng định dạng';
-    }
-
     if (!formData.phone.trim()) {
       newErrors.phone = 'Vui lòng nhập số điện thoại';
     } else if (!PHONE_REGEX.test(formData.phone.replace(/\s/g, ''))) {
-      newErrors.phone = 'Số điện thoại không hợp lệ (10 chữ số, bắt đầu bằng 0)';
+      newErrors.phone =
+        'Số điện thoại không hợp lệ (10 chữ số, bắt đầu bằng 0)';
     }
 
     setErrors(newErrors);
@@ -140,25 +142,47 @@ function CustomerProfile() {
 
     setSaving(true);
     try {
+      if (!profileMeta.dateOfBirth) {
+        setError(
+          'Hồ sơ hiện chưa có ngày sinh nên chưa thể cập nhật. Vui lòng liên hệ quản trị viên.'
+        );
+        setSaving(false);
+        return;
+      }
+
       const payload = {
-        name: formData.name.trim(),
-        email: formData.email.trim(),
+        dateOfBirth: profileMeta.dateOfBirth,
+        gender: profileMeta.gender,
         phone: formData.phone.replace(/\s/g, ''),
+        address: profileMeta.address ?? '',
+        avatarUrl: profileMeta.avatarUrl,
       };
       const updated = await updateMyProfile(payload);
 
       // Backend may return either the user object directly or a wrapped payload.
       const updatedFields = {
-        name: updated?.name ?? payload.name,
-        email: updated?.email ?? payload.email,
+        name: updated?.fullName ?? updated?.name ?? original.name,
+        email: original.email,
         phone: updated?.phone ?? payload.phone,
       };
+
+      setProfileMeta({
+        dateOfBirth: updated?.dateOfBirth ?? profileMeta.dateOfBirth,
+        gender: updated?.gender ?? profileMeta.gender,
+        address: updated?.address ?? profileMeta.address,
+        avatarUrl: updated?.avatarUrl ?? profileMeta.avatarUrl,
+      });
+
       setOriginal(updatedFields);
       setFormData(updatedFields);
 
-      // Sync auth state so the header/sidebar reflects the new name.
+      // Sync auth state so the header/sidebar reflects the new phone.
+      // Do NOT push name/email back into Auth: those fields are read-only
+      // and the backend never updates them through this endpoint.
       if (typeof updateUser === 'function') {
-        updateUser(updatedFields);
+        updateUser({
+          phone: updatedFields.phone,
+        });
       }
 
       flash.show('Cập nhật thông tin cá nhân thành công.');
@@ -286,7 +310,8 @@ function CustomerProfile() {
               placeholder="Nhập họ và tên của bạn"
               error={errors.name}
               autoComplete="name"
-              disabled={!isEditing}
+              disabled
+              readOnly
             />
           </div>
 
@@ -299,7 +324,8 @@ function CustomerProfile() {
               placeholder="email@example.com"
               error={errors.email}
               autoComplete="email"
-              disabled={!isEditing}
+              disabled
+              readOnly
             />
           </div>
 

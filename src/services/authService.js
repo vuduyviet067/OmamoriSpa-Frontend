@@ -4,29 +4,50 @@
 
 import apiClient from './api';
 
+// ============= FINAL BACKEND CONSTANTS =============
+// API paths relative to VITE_API_URL (which is http://localhost:8888/api/omamori)
+// Gateway strips /api/omamori prefix, routes to user-service at /users
+// UserController: @RequestMapping("/auth")
+const API_AUTH_LOGIN = '/users/auth/login';
+const API_AUTH_REGISTER = '/users/auth/create';
+
+const USE_MOCK = import.meta.env.VITE_USE_MOCK_AUTH === 'true';
+
+// ============= BACKEND ROLE ADAPTER =============
+// Backend Role enum: CUSTOMER, THERAPIST, ADMIN
+// Frontend roles: CUSTOMER, THERAPIST, ADMIN
+// Direct 1:1 mapping
+const BACKEND_ROLES = {
+  CUSTOMER: 'CUSTOMER',
+  THERAPIST: 'THERAPIST',
+  ADMIN: 'ADMIN',
+};
+
 // ============= MOCK DATA =============
+// Mock users include both 'name' and 'fullName' for backward compatibility
+// with existing FE components that consume user.name
 const MOCK_USERS = {
   customer: {
     id: 1,
-    username: 'khachhang',
     name: 'Nguyễn Văn A',
-    email: 'nguyenvana@email.com',
+    fullName: 'Nguyễn Văn A',
+    email: 'khachhang@email.com',
     phone: '0901234567',
     role: 'CUSTOMER',
   },
   therapist: {
     id: 2,
-    username: 'kythuatvien',
     name: 'Trần Thị Linh',
-    email: 'tranthilinh@email.com',
+    fullName: 'Trần Thị Linh',
+    email: 'kythuatvien@email.com',
     phone: '0902345678',
     role: 'THERAPIST',
   },
   admin: {
     id: 3,
-    username: 'quantrivien',
     name: 'Lê Quốc Minh',
-    email: 'lequocminh@email.com',
+    fullName: 'Lê Quốc Minh',
+    email: 'quantrivien@email.com',
     phone: '0903456789',
     role: 'ADMIN',
   },
@@ -43,22 +64,22 @@ const mockDelay = (ms = 800) => new Promise(resolve => setTimeout(resolve, ms));
 
 // ============= MOCK IMPLEMENTATION =============
 const mockAuth = {
-  async login(username, password) {
+  async login(email, password) {
     await mockDelay();
 
     // Check credentials
     let user = null;
-    if (username === 'khachhang' && password === MOCK_PASSWORDS.customer) {
-      user = MOCK_USERS.customer;
-    } else if (username === 'kythuatvien' && password === MOCK_PASSWORDS.therapist) {
-      user = MOCK_USERS.therapist;
-    } else if (username === 'quantrivien' && password === MOCK_PASSWORDS.admin) {
-      user = MOCK_USERS.admin;
+    if (email === 'khachhang@email.com' && password === MOCK_PASSWORDS.customer) {
+      user = { ...MOCK_USERS.customer };
+    } else if (email === 'kythuatvien@email.com' && password === MOCK_PASSWORDS.therapist) {
+      user = { ...MOCK_USERS.therapist };
+    } else if (email === 'quantrivien@email.com' && password === MOCK_PASSWORDS.admin) {
+      user = { ...MOCK_USERS.admin };
     }
 
     if (!user) {
-      const error = new Error('Tên đăng nhập hoặc mật khẩu không đúng');
-      error.response = { status: 401, data: { message: 'Tên đăng nhập hoặc mật khẩu không đúng' } };
+      const error = new Error('Sai tài khoản hoặc mật khẩu');
+      error.response = { status: 401, data: { message: 'Sai tài khoản hoặc mật khẩu' } };
       throw error;
     }
 
@@ -74,19 +95,19 @@ const mockAuth = {
   async register(data) {
     await mockDelay();
 
-    // Simulate email/username check
-    const existingUsers = ['khachhang', 'kythuatvien', 'quantrivien'];
-    if (existingUsers.includes(data.username)) {
-      const error = new Error('Tên đăng nhập đã tồn tại');
-      error.response = { status: 400, data: { message: 'Tên đăng nhập đã tồn tại' } };
+    // Simulate email check
+    const existingEmails = ['khachhang@email.com', 'kythuatvien@email.com', 'quantrivien@email.com'];
+    if (existingEmails.includes(data.email)) {
+      const error = new Error('Người dùng đã tồn tại');
+      error.response = { status: 400, data: { code: 1002, message: 'Người dùng đã tồn tại' } };
       throw error;
     }
 
-    // Create new user
+    // Create new user with both name and fullName for FE compatibility
     const newUser = {
       id: Date.now(),
-      username: data.username,
-      name: data.name,
+      name: data.fullName, // Backward compatibility
+      fullName: data.fullName,
       email: data.email,
       phone: data.phone,
       role: 'CUSTOMER', // Always CUSTOMER for self-registration
@@ -103,39 +124,130 @@ const mockAuth = {
 
 // ============= API IMPLEMENTATION =============
 const realAuth = {
-  async login(username, password) {
-    const response = await apiClient.post('/auth/login', { username, password });
-    return response.data;
+  /**
+   * Login to FINAL backend
+   * Endpoint: POST /users/auth/login (relative to VITE_API_URL)
+   * Request: { email, password }
+   * Response: ApiResponse<LoginResponse> where LoginResponse = { token }
+   */
+  async login(email, password) {
+    const response = await apiClient.post(API_AUTH_LOGIN, { email, password });
+    // Response shape: { code: 1000, message: "...", result: { token: "..." } }
+    const { result } = response.data;
+    return {
+      accessToken: result.token,
+      user: null, // Will be populated from JWT in AuthContext
+    };
   },
 
+  /**
+   * Register new customer on FINAL backend
+   * Endpoint: POST /users/auth/create (relative to VITE_API_URL)
+   * Request: UserCreationRequest = { fullName, email, password, dateOfBirth, gender, phone, address }
+   * Response: ApiResponse<UserCreationResponse>
+   *
+   * NOTE: Registration does NOT return a token. The RegisterPage handles navigation
+   * to login page after successful registration. This allows user to login with
+   * their chosen credentials.
+   */
   async register(data) {
-    const response = await apiClient.post('/auth/register', {
-      name: data.name,
-      username: data.username,
+    const requestPayload = {
+      fullName: data.fullName,
       email: data.email,
-      phone: data.phone,
       password: data.password,
-    });
-    return response.data;
-  },
-
-  async getCurrentUser() {
-    const response = await apiClient.get('/auth/me');
-    return response.data;
-  },
-
-  async refreshToken(refreshToken) {
-    const response = await apiClient.post('/auth/refresh', { refreshToken });
-    return response.data;
+      dateOfBirth: data.dateOfBirth, // Format: YYYY-MM-DD (LocalDate)
+      gender: data.gender, // MALE | FEMALE | OTHER
+      phone: data.phone,
+      address: data.address,
+    };
+    const response = await apiClient.post(API_AUTH_REGISTER, requestPayload);
+    // Return sanitized response - no token, user should login separately
+    return {
+      user: null, // User will login after redirect
+      registrationResult: response.data,
+    };
   },
 };
 
-// ============= EXPORT =============
-// Switch between mock and real API based on environment
-const USE_MOCK = import.meta.env.VITE_USE_MOCK_AUTH === 'true';
+// ============= JWT DECODE (Client-side only, for session restore) =============
+/**
+ * Decode JWT token to extract claims.
+ * NOTE: This is for UI/session only, NOT for security verification.
+ * The actual security verification is done by the backend.
+ */
+function parseJwt(token) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
+}
 
-// Mock getCurrentUser — restores the stored user from localStorage (simulates what
-// a real /auth/me would return after the mock login stored it in AuthContext).
+/**
+ * Normalize backend role to frontend role.
+ * Returns null if role is unknown/invalid (session will be rejected).
+ *
+ * Backend Role enum: CUSTOMER, THERAPIST, ADMIN
+ * Frontend roles: CUSTOMER, THERAPIST, ADMIN
+ */
+function normalizeRole(backendRole) {
+  if (!backendRole) return null;
+
+  // Direct mapping from backend to frontend
+  if (BACKEND_ROLES[backendRole]) {
+    return BACKEND_ROLES[backendRole];
+  }
+
+  // Unknown role - must return null to reject session
+  console.error(`Unknown role from backend: ${backendRole}, session will be rejected`);
+  return null;
+}
+
+/**
+ * Extract user info from JWT token.
+ * JWT claims from FINAL backend:
+ * - sub: user ID
+ * - scope: role (e.g., "CUSTOMER")
+ * - iss: "Omamori.com"
+ * - iat: issue time
+ * - exp: expiration time
+ * - jti: JWT ID
+ *
+ * Returns null if JWT is invalid or role is unknown.
+ */
+function extractUserFromJwt(token) {
+  const claims = parseJwt(token);
+  if (!claims) return null;
+
+  // Validate required claims
+  if (!claims.sub) {
+    console.error('JWT missing required claim: sub (user ID)');
+    return null;
+  }
+
+  const role = normalizeRole(claims.scope);
+  if (!role) {
+    // Unknown or missing role - reject session
+    console.error('JWT has unknown or missing role:', claims.scope);
+    return null;
+  }
+
+  return {
+    id: claims.sub,
+    role: role,
+    email: claims.email || null, // email not in JWT, only in user table
+  };
+}
+
+// ============= MOCK HELPERS =============
 const mockGetCurrentUser = async () => {
   await mockDelay(100);
   const stored = localStorage.getItem('omamori_user');
@@ -157,13 +269,14 @@ const mockRefreshToken = async () => {
   return { accessToken: token || `mock_jwt_refreshed_${Date.now()}` };
 };
 
+// ============= EXPORT =============
 const authService = USE_MOCK ? mockAuth : realAuth;
 
-export const login = (username, password) => authService.login(username, password);
+export const login = (email, password) => authService.login(email, password);
 export const register = (data) => authService.register(data);
-export const getCurrentUser = () => (USE_MOCK ? mockGetCurrentUser() : realAuth.getCurrentUser());
+export const getCurrentUser = () => (USE_MOCK ? mockGetCurrentUser() : Promise.reject(new Error('No /me endpoint in FINAL backend')));
 export const refreshToken = () =>
-  USE_MOCK ? mockRefreshToken() : realAuth.refreshToken();
+  USE_MOCK ? mockRefreshToken() : Promise.reject(new Error('No refresh endpoint in FINAL backend'));
 
-export { MOCK_USERS, MOCK_PASSWORDS };
+export { extractUserFromJwt, normalizeRole, parseJwt, MOCK_USERS, MOCK_PASSWORDS, BACKEND_ROLES };
 export default authService;
