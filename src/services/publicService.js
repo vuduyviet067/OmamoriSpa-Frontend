@@ -21,6 +21,7 @@
 
 import mocks from '@/mocks';
 import { resolveCosmeticImage } from '@/utils/cosmeticImages';
+import { resolveTreatmentImage } from '@/utils/treatmentImages';
 
 // Environment configuration
 const USE_MOCK = import.meta.env.VITE_USE_MOCK_PUBLIC !== 'false';
@@ -150,7 +151,7 @@ function normalizeTreatment(treatment) {
     price: treatment.price,
     duration: treatment.durationMinutes || treatment.duration || 0,
     isActive: treatment.isActive !== false,
-    image: getImageWithFallback(treatment.image, 'service'),
+    image: resolveTreatmentImage(treatment),
   };
 }
 
@@ -189,7 +190,7 @@ function normalizeMockTreatment(treatment) {
     price: treatment.price,
     duration: treatment.duration || treatment.durationMinutes || 0,
     isActive: treatment.isActive !== false,
-    image: getImageWithFallback(treatment.image, 'service'),
+    image: resolveTreatmentImage(treatment),
   };
 }
 
@@ -209,7 +210,7 @@ function normalizeMockCosmetic(cosmetic) {
     price: cosmetic.price,
     stock: cosmetic.stock || cosmetic.stockQuantity || 0,
     volume: cosmetic.volume || cosmetic.unit || null,
-    image: getImageWithFallback(cosmetic.image, 'cosmetic'),
+    image: resolveCosmeticImage(cosmetic),
   };
 }
 

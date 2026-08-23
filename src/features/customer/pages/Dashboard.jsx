@@ -8,15 +8,9 @@ import {
   APPOINTMENT_STATUS_VARIANTS,
 } from '@/services/customerService';
 import { Button, StatusBadge, LoadingState, ErrorState } from '@/components/common';
+import { resolveTreatmentImage } from '@/utils/treatmentImages';
 import { formatCurrency } from '@/utils/formatters';
 import './Dashboard.css';
-
-const SERVICE_IMAGES = {
-  'Massage thư giãn': '/images/spa/source/massage.webp',
-  'Chăm sóc da mặt': '/images/spa/source/facial.jpg',
-  'Liệu pháp đá nóng': '/images/spa/source/hot-stone.webp',
-  'Gội đầu dưỡng sinh': '/images/spa/source/head-spa.jpg',
-};
 
 const BOOKING_STEPS = [
   { step: 1, label: 'Chọn dịch vụ' },
@@ -86,9 +80,10 @@ function CustomerDashboard() {
     });
   };
 
-  const getServiceImage = (serviceName) => {
-    return SERVICE_IMAGES[serviceName] || null;
-  };
+  // Resolve through the shared treatment image resolver using the embedded
+  // service object on the appointment (the appointment-service does NOT
+  // expose an `image` field, so we look up by UUID instead).
+  const getServiceImage = (apt) => resolveTreatmentImage(apt?.service || apt);
 
   const getTransactionCode = (txn) =>
     txn?.invoiceCode || txn?.code || txn?.invoiceNumber || (txn?.id ? `INV-${txn.id}` : '—');
@@ -191,7 +186,7 @@ function CustomerDashboard() {
                   const roomName = apt.roomName || apt.room?.name;
                   const statusLabel = APPOINTMENT_STATUS_LABELS[apt.status] || apt.status;
                   const statusVariant = APPOINTMENT_STATUS_VARIANTS[apt.status] || 'neutral';
-                  const serviceImage = getServiceImage(serviceName);
+                  const serviceImage = getServiceImage(apt);
 
                   return (
                     <Link

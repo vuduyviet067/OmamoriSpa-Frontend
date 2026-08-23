@@ -15,6 +15,7 @@ import {
   EmptyState,
   ConfirmDialog,
 } from '@/components/common';
+import { resolveTreatmentImage } from '@/utils/treatmentImages';
 import useFlashMessage from '@/hooks/useFlashMessage';
 import './Appointments.css';
 
@@ -32,8 +33,10 @@ const UPCOMING_STATUSES = [
 ];
 
 const getServiceImage = (appointment) => {
-  // Prefer the image from the service object returned by the API.
-  return appointment.service?.image || appointment.serviceImage || '';
+  // Resolve through the shared treatment image resolver so the embedded
+  // service object on an appointment (which has no `image` field from the
+  // backend) still picks up the deterministic UUID-based local asset.
+  return resolveTreatmentImage(appointment.service || appointment);
 };
 
 const formatTime = (timeString) => {
