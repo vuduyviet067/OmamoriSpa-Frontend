@@ -13,7 +13,7 @@ export const cosmetics = [
       'Serum phục hồi chuyên sâu với chiết xuất thảo mộc thiên nhiên, giúp tái tạo tế bào da và cấp ẩm sâu.',
     stock: 35,
     volume: '30ml',
-    image: '/images/spa/source/serum.webp',
+    image: '/images/spa/cosmetics/serum.jpg',
     ingredients: ['Chiết xuất lô hội', 'Vitamin E', 'Hyaluronic Acid'],
   },
   {
@@ -25,7 +25,7 @@ export const cosmetics = [
       'Kem dưỡng ẩm giàu dưỡng chất, giúp da mềm mịn, căng mướt và bảo vệ da khỏi các tác nhân gây khô.',
     stock: 50,
     volume: '50ml',
-    image: '/images/spa/source/moisturizer.webp',
+    image: '/images/spa/cosmetics/moisturizer.jpg',
     ingredients: ['Bơ hạt mỡ', 'Dầu jojoba', 'Glycerin thực vật'],
   },
   {
@@ -37,7 +37,7 @@ export const cosmetics = [
       'Tinh dầu oải hương nguyên chất 100%, giúp thư giãn tinh thần, giảm căng thẳng và cải thiện giấc ngủ.',
     stock: 80,
     volume: '15ml',
-    image: '/images/spa/source/lavender-oil.webp',
+    image: '/images/spa/cosmetics/lavender-oil.jpg',
     ingredients: ['Tinh dầu oải hương nguyên chất'],
   },
   {
@@ -49,7 +49,7 @@ export const cosmetics = [
       'Mặt nạ thải độc chiết xuất từ đất sét trắng và than hoạt tính, giúp hút sạch bã nhờn và làm sáng da.',
     stock: 60,
     volume: '100ml',
-    image: '/images/spa/source/detox-mask.jpg',
+    image: '/images/spa/cosmetics/detox-mask.jpg',
     ingredients: ['Đất sét trắng', 'Than hoạt tính', 'Chiết xuất trà xanh'],
   },
 ];

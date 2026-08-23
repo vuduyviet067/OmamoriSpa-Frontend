@@ -20,6 +20,7 @@
 // to maintain clear architectural boundaries.
 
 import mocks from '@/mocks';
+import { resolveCosmeticImage } from '@/utils/cosmeticImages';
 
 // Environment configuration
 const USE_MOCK = import.meta.env.VITE_USE_MOCK_PUBLIC !== 'false';
@@ -169,7 +170,7 @@ function normalizeCosmetic(cosmetic) {
     price: cosmetic.price,
     stock: cosmetic.stockQuantity || cosmetic.stock || 0,
     volume: cosmetic.volume || cosmetic.unit || null,
-    image: getImageWithFallback(cosmetic.image, 'cosmetic'),
+    image: resolveCosmeticImage(cosmetic),
   };
 }
 

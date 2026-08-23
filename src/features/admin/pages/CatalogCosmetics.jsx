@@ -12,6 +12,7 @@ import {
   StatusBadge,
 } from '@/components/common';
 import { formatCurrency } from '@/utils/formatters';
+import { resolveCosmeticImage } from '@/utils/cosmeticImages';
 import {
   createCosmetic,
   deleteCosmetic,
@@ -424,7 +425,7 @@ function AdminCatalogCosmetics() {
               <tbody>
                 {filtered.map((item) => {
                   const status = formatStatus(item);
-                  const image = item.image || item.imageUrl || item.mediaUrl;
+                  const image = resolveCosmeticImage(item);
                   return (
                     <tr key={item.id ?? item._id}>
                       <td>
@@ -474,7 +475,7 @@ function AdminCatalogCosmetics() {
             <div className="admin-table-cards">
               {filtered.map((item) => {
                 const status = formatStatus(item);
-                const image = item.image || item.imageUrl || item.mediaUrl;
+                const image = resolveCosmeticImage(item);
                 return (
                   <div className="admin-table-card-row" key={`m-${item.id ?? item._id}`}>
                     <div className="admin-table-card-row-top">
