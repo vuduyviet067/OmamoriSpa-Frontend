@@ -234,16 +234,19 @@ function normalizeMockRoom(room) {
 }
 
 /**
- * Normalize mock therapist for UI compatibility.
+ * Normalize public therapist from real backend for UI compatibility.
  */
-function normalizeMockTherapist(therapist) {
+function normalizeTherapist(therapist) {
   if (!therapist) return null;
 
   return {
     id: therapist.id,
-    name: therapist.name,
-    specialty: therapist.specialty || null,
-    image: getImageWithFallback(therapist.image, 'person'),
+    name: therapist.fullName,
+    specialty: therapist.specialization || null,
+    experience: therapist.experience || null,
+    certificate: therapist.certificate || null,
+    image: therapist.avatarUrl || IMAGE_FALLBACKS.person,
+    active: therapist.active !== false,
   };
 }
 
@@ -368,14 +371,33 @@ export const getRooms = async () => {
 
 /**
  * Get all therapists.
- * NOTE: No public therapist endpoint exists in Phase 2 backend.
- * Using mock data for display purposes.
- * Recommendation: Use STATIC MARKETING content or implement future public API.
+ * Uses real backend when VITE_USE_MOCK_PUBLIC=false, mock otherwise.
  */
 export const getTherapists = async () => {
-  await mockDelay();
-  const list = cloneList(mocks.therapists);
-  return list.map(normalizeMockTherapist);
+  if (USE_MOCK) {
+    await mockDelay();
+    const list = cloneList(mocks.therapists);
+    return list.map((t) => ({
+      id: t.id,
+      name: t.name,
+      specialty: t.specialty || null,
+      experience: t.experience || null,
+      certificate: t.certificate || null,
+      image: getImageWithFallback(t.image, 'person'),
+      active: t.active !== false,
+    }));
+  }
+
+  try {
+    const data = await apiFetch('/profiles/public/therapists');
+    if (!data || !Array.isArray(data)) {
+      return [];
+    }
+    return data.map(normalizeTherapist);
+  } catch (error) {
+    console.error('Failed to fetch therapists from backend:', error);
+    throw error;
+  }
 };
 
 // =========================================================
@@ -385,8 +407,7 @@ export const getTherapists = async () => {
 /**
  * Load homepage catalog (services, cosmetics, therapists).
  * Rooms excluded as they are not displayed on public homepage.
- * Services/Cosmetics use real backend when configured.
- * Therapists always use mock (no public endpoint).
+ * Services/Cosmetics/Therapists use real backend when configured.
  */
 export const getHomeCatalog = async () => {
   const [services, cosmetics, therapists] = await Promise.all([
