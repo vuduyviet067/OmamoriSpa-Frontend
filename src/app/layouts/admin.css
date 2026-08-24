@@ -1468,6 +1468,76 @@
   border-top: 1px solid var(--color-border-light);
 }
 
+.admin-bank-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.admin-bank-qr-frame {
+  width: 240px;
+  height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  background-color: white;
+  padding: var(--space-3);
+  box-sizing: border-box;
+}
+
+.admin-bank-qr-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.admin-bank-qr .admin-confirm-grid {
+  width: 100%;
+}
+
+.admin-bank-qr-amount {
+  font-size: var(--text-lg);
+  color: var(--color-green-deep);
+}
+
+.admin-bank-qr-transfer {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background-color: var(--color-cream, #f7f3ec);
+  border: 1px dashed var(--color-border);
+  box-sizing: border-box;
+}
+
+.admin-bank-qr-transfer-label {
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+}
+
+.admin-bank-qr-transfer-value {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--color-charcoal);
+  word-break: break-all;
+  text-align: center;
+}
+
+.admin-bank-qr-note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-charcoal-muted);
+  text-align: center;
+}
+
 .admin-pick-list {
   display: flex;
   flex-direction: column;

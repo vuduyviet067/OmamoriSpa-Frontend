@@ -266,6 +266,72 @@ function PaymentConfirmDialog({ target, method, onClose, onConfirm, loading }) {
 }
 
 // =========================================================
+// Bank-transfer QR preview modal.
+// Inserted ONLY between PaymentModal and PaymentConfirmDialog
+// for the BANK_TRANSFER flow. Cash skips this entirely.
+// Only when the admin presses "Đã nhận thanh toán" does the
+// existing payInvoice() BANK_TRANSFER API get invoked.
+// =========================================================
+const BANK_QR_IMAGE_URL = '/images/payment/bank-transfer-qr.png';
+
+function BankQrModal({ isOpen, invoice, loading, onBack, onConfirm }) {
+  if (!isOpen || !invoice) return null;
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={loading ? () => {} : onBack}
+      title="Quét QR chuyển khoản"
+      size="md"
+      footer={(
+        <>
+          <Button variant="ghost" onClick={onBack} disabled={loading}>Quay lại</Button>
+          <Button onClick={onConfirm} disabled={loading}>
+            {loading ? 'Đang xử lý...' : 'Đã nhận thanh toán'}
+          </Button>
+        </>
+      )}
+    >
+      <div className="admin-bank-qr">
+        <div className="admin-bank-qr-frame">
+          <img
+            src={BANK_QR_IMAGE_URL}
+            alt="QR chuyển khoản"
+            className="admin-bank-qr-image"
+            draggable="false"
+          />
+        </div>
+
+        <div className="admin-confirm-grid">
+          <div className="admin-confirm-grid-row">
+            <span>Mã hóa đơn</span>
+            <strong>{invoice.code}</strong>
+          </div>
+          {invoice.customerName && (
+            <div className="admin-confirm-grid-row">
+              <span>Khách hàng</span>
+              <strong>{invoice.customerName}</strong>
+            </div>
+          )}
+          <div className="admin-confirm-grid-row admin-confirm-grid-row--total">
+            <span>Tổng thanh toán</span>
+            <strong className="admin-bank-qr-amount">{formatCurrency(invoice.total)}</strong>
+          </div>
+        </div>
+
+        <div className="admin-bank-qr-transfer">
+          <span className="admin-bank-qr-transfer-label">Nội dung chuyển khoản:</span>
+          <strong className="admin-bank-qr-transfer-value">{invoice.code}</strong>
+        </div>
+
+        <p className="admin-bank-qr-note">
+          Vui lòng xác nhận sau khi đã nhận được thanh toán.
+        </p>
+      </div>
+    </Modal>
+  );
+}
+
+// =========================================================
 // Invoice type / item-type label helpers (Vietnamese, single source of truth)
 // =========================================================
 const INVOICE_TYPE_LABELS = {
@@ -1123,6 +1189,7 @@ function AdminInvoices() {
   const [paymentTarget, setPaymentTarget] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [showPaymentConfirm, setShowPaymentConfirm] = useState(false);
+  const [showBankQr, setShowBankQr] = useState(false);
   const [submittingPayment, setSubmittingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState(null);
 
@@ -1182,6 +1249,7 @@ function AdminInvoices() {
     setPaymentTarget(invoice);
     setPaymentMethod('CASH');
     setShowPaymentConfirm(false);
+    setShowBankQr(false);
     setPaymentError(null);
   };
 
@@ -1189,6 +1257,7 @@ function AdminInvoices() {
     if (submittingPayment) return;
     setPaymentTarget(null);
     setShowPaymentConfirm(false);
+    setShowBankQr(false);
     setPaymentError(null);
   };
 
@@ -1210,6 +1279,7 @@ function AdminInvoices() {
       setInvoices((prev) => prev.map((inv) => (inv.id === normalised.id ? normalised : inv)));
       setPaymentTarget(null);
       setShowPaymentConfirm(false);
+      setShowBankQr(false);
       setBanner({ type: 'success', text: `Đã thanh toán hóa đơn ${normalised.code}.` });
       // Backend deducts stock on payment - refresh inventory if we visit it next.
       load();
@@ -1221,6 +1291,7 @@ function AdminInvoices() {
       if (isStaleStateError(err)) {
         setDetailId(null);
         setShowPaymentConfirm(false);
+        setShowBankQr(false);
         setPaymentTarget(null);
         setPaymentError(null);
         setBanner({
@@ -1236,6 +1307,7 @@ function AdminInvoices() {
         if (targetId) setDetailId(targetId);
       } else {
         setPaymentError(extractApiError(err, 'Không thể xác nhận thanh toán.'));
+        // Keep the QR modal open on transient errors so the admin can retry.
       }
     } finally {
       setSubmittingPayment(false);
@@ -1580,15 +1652,34 @@ function AdminInvoices() {
       />
 
       <PaymentModal
-        isOpen={!!paymentTarget && !showPaymentConfirm}
+        isOpen={!!paymentTarget && !showPaymentConfirm && !showBankQr}
         invoice={paymentTarget}
         method={paymentMethod}
         onMethodChange={setPaymentMethod}
         onClose={closePaymentModal}
         onProceed={() => {
-          // Show the confirm dialog while keeping paymentTarget available.
-          setShowPaymentConfirm(true);
+          // Bank transfer inserts an intermediate QR preview step.
+          // Cash still flows straight to the existing confirm dialog.
+          if (paymentMethod === 'BANK_TRANSFER') {
+            setShowBankQr(true);
+            setPaymentError(null);
+          } else {
+            setShowPaymentConfirm(true);
+          }
         }}
+      />
+
+      <BankQrModal
+        isOpen={!!paymentTarget && showBankQr}
+        invoice={paymentTarget}
+        loading={submittingPayment}
+        onBack={() => {
+          // Returning to the picker (not the confirm dialog).
+          if (submittingPayment) return;
+          setShowBankQr(false);
+          setPaymentError(null);
+        }}
+        onConfirm={performPayment}
       />
 
       <PaymentConfirmDialog
