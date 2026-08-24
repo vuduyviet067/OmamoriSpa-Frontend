@@ -22,6 +22,7 @@
 import mocks from '@/mocks';
 import { resolveCosmeticImage } from '@/utils/cosmeticImages';
 import { resolveTreatmentImage } from '@/utils/treatmentImages';
+import { resolveTherapistImage } from '@/utils/therapistImages';
 
 // Environment configuration
 const USE_MOCK = import.meta.env.VITE_USE_MOCK_PUBLIC !== 'false';
@@ -245,7 +246,7 @@ function normalizeTherapist(therapist) {
     specialty: therapist.specialization || null,
     experience: therapist.experience || null,
     certificate: therapist.certificate || null,
-    image: therapist.avatarUrl || IMAGE_FALLBACKS.person,
+    image: resolveTherapistImage(therapist),
     active: therapist.active !== false,
   };
 }
