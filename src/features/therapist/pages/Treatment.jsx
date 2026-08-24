@@ -7,6 +7,8 @@ import {
   getCustomerTreatmentHistory,
   getPrescribableCosmetics,
   savePrescription,
+  updateAppointmentStatus,
+  rejectAppointment,
   APPOINTMENT_STATUS,
   APPOINTMENT_STATUS_LABELS,
   APPOINTMENT_STATUS_VARIANTS,
@@ -87,6 +89,14 @@ function Treatment() {
   const [rxRows, setRxRows] = useState([]);
   const [rxSubmitting, setRxSubmitting] = useState(false);
   const [rxError, setRxError] = useState(null);
+
+  // Approval flow (PENDING -> CONFIRMED). Mirrors the journal submit
+  // pattern: a dedicated local error and a submitting flag prevent
+  // double-clicks and give the user a clear failure message.
+  const [approveSubmitting, setApproveSubmitting] = useState(false);
+  const [approveError, setApproveError] = useState(null);
+  const [rejectSubmitting, setRejectSubmitting] = useState(false);
+  const [rejectError, setRejectError] = useState(null);
 
   const customerId = useMemo(() => getCustomerId(appointment), [appointment]);
 
@@ -177,6 +187,54 @@ function Treatment() {
 
   const isCompleted = appointment?.status === APPOINTMENT_STATUS.COMPLETED;
   const isInProgress = appointment?.status === APPOINTMENT_STATUS.IN_PROGRESS;
+  const isPending = appointment?.status === APPOINTMENT_STATUS.PENDING;
+  const isCancelled = appointment?.status === APPOINTMENT_STATUS.CANCELLED;
+
+  const handleApprove = async () => {
+    if (!appointment || !isPending || approveSubmitting || rejectSubmitting) return;
+    setApproveSubmitting(true);
+    setApproveError(null);
+    setRejectError(null);
+    try {
+      const updated = await updateAppointmentStatus(appointmentId, APPOINTMENT_STATUS.CONFIRMED);
+      flash.show('Đã duyệt lịch hẹn. Ca đã sẵn sàng cho bạn xử lý tiếp.');
+      setAppointment(updated);
+    } catch (err) {
+      console.error('Error approving appointment:', err);
+      setApproveError(
+        err.response?.data?.message
+          || err.message
+          || 'Không thể duyệt lịch hẹn. Vui lòng thử lại.'
+      );
+    } finally {
+      setApproveSubmitting(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!appointment || !isPending || approveSubmitting || rejectSubmitting) return;
+    const confirmed = window.confirm(
+      'Bạn chắc chắn muốn từ chối lịch hẹn này? Lịch sẽ chuyển sang trạng thái Đã hủy.'
+    );
+    if (!confirmed) return;
+    setRejectSubmitting(true);
+    setRejectError(null);
+    setApproveError(null);
+    try {
+      const updated = await rejectAppointment(appointmentId);
+      flash.show('Đã từ chối lịch hẹn. Khách hàng sẽ được thông báo.');
+      setAppointment(updated);
+    } catch (err) {
+      console.error('Error rejecting appointment:', err);
+      setRejectError(
+        err.response?.data?.message
+          || err.message
+          || 'Không thể từ chối lịch hẹn. Vui lòng thử lại.'
+      );
+    } finally {
+      setRejectSubmitting(false);
+    }
+  };
 
   const canSubmit = useMemo(() => {
     if (submitting) return false;
@@ -419,7 +477,56 @@ function Treatment() {
         </div>
       </section>
 
-      {!isCompleted && (
+      {isPending && (
+        <section className="customer-card therapist-approval" aria-label="Duyệt lịch hẹn">
+          <div className="customer-card-title">Duyệt lịch hẹn</div>
+          <div className="booking-alert booking-alert-info" role="status">
+            Ca đang chờ bạn duyệt. Duyệt để xác nhận bạn sẽ phụ trách ca trị liệu này,
+            sau đó mới có thể bắt đầu trị liệu và lưu hồ sơ.
+          </div>
+
+          {approveError && (
+            <div className="booking-alert booking-alert-error" role="alert">
+              <strong>Không thể duyệt:</strong> {approveError}
+            </div>
+          )}
+          {rejectError && (
+            <div className="booking-alert booking-alert-error" role="alert">
+              <strong>Không thể từ chối:</strong> {rejectError}
+            </div>
+          )}
+
+          <div className="therapist-approval-actions">
+            <Button
+              type="button"
+              onClick={handleApprove}
+              disabled={approveSubmitting || rejectSubmitting}
+              loading={approveSubmitting}
+            >
+              {approveSubmitting ? 'Đang duyệt...' : 'Duyệt lịch'}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleReject}
+              disabled={approveSubmitting || rejectSubmitting}
+              loading={rejectSubmitting}
+            >
+              {rejectSubmitting ? 'Đang từ chối...' : 'Từ chối'}
+            </Button>
+          </div>
+        </section>
+      )}
+
+      {isCancelled && (
+        <section className="customer-card therapist-approval" aria-label="Lịch đã hủy">
+          <div className="booking-alert booking-alert-error" role="status">
+            Lịch hẹn này đã được hủy. Không thể tiếp tục trị liệu.
+          </div>
+        </section>
+      )}
+
+      {!isCompleted && !isPending && !isCancelled && (
         <form className="customer-card therapist-journal" onSubmit={handleSubmit} noValidate>
           <div className="customer-card-title">
             Hồ sơ trị liệu &amp; kê đơn
@@ -664,7 +771,7 @@ function Treatment() {
         )}
       </section>
 
-      {!isInProgress && !isCompleted && (
+      {!isInProgress && !isCompleted && !isPending && !isCancelled && (
         <div className="booking-alert booking-alert-info" role="status">
           Hãy bắt đầu ca trị liệu trước khi ghi hồ sơ.
         </div>

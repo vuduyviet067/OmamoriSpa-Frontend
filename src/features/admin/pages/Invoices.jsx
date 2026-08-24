@@ -19,7 +19,7 @@ import {
   createRetailInvoice,
   extractApiError,
   getAdminAppointmentById,
-  getAdminAppointments,
+  getAdminEligibleAppointments,
   getCosmeticsAdmin,
   getCustomers,
   getInvoiceById,
@@ -667,7 +667,12 @@ function AppointmentInvoiceModal({ isOpen, onClose, onCreated }) {
     setDetail(null);
     setDetailError(null);
     setGlobalError(null);
-    getAdminAppointments({ status: 'COMPLETED' })
+    // Operational visibility rule: the picker may only show appointments
+    // that have been approved by the assigned therapist (CONFIRMED,
+    // IN_PROGRESS, COMPLETED). PENDING rows must NOT appear here. Backend
+    // still rejects invoicing of CONFIRMED / IN_PROGRESS, so Admin can
+    // safely browse the list without accidentally billing mid-treatment.
+    getAdminEligibleAppointments()
       .then((list) => setAppointments(Array.isArray(list) ? list : []))
       .catch((err) => setListError(extractApiError(err, 'Không thể tải lịch hẹn.')))
       .finally(() => setLoadingList(false));
@@ -752,14 +757,14 @@ function AppointmentInvoiceModal({ isOpen, onClose, onCreated }) {
           <div className="admin-form-error" role="alert">{globalError}</div>
         )}
         <Input
-          label="Tìm lịch hẹn đã hoàn thành"
+          label="Tìm lịch hẹn đã được kỹ thuật viên duyệt"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Khách hàng, dịch vụ, KTV..."
         />
 
         <div>
-          <div className="admin-detail-section-title">Lịch hẹn đã hoàn thành</div>
+          <div className="admin-detail-section-title">Lịch hẹn đã được kỹ thuật viên duyệt</div>
           {loadingList ? (
             <LoadingState message="Đang tải lịch hẹn..." />
           ) : listError ? (
@@ -768,7 +773,7 @@ function AppointmentInvoiceModal({ isOpen, onClose, onCreated }) {
             </div>
           ) : filtered.length === 0 ? (
             <p style={{ color: 'var(--color-charcoal-muted)', margin: 0 }}>
-              Không có lịch hẹn đã hoàn thành phù hợp.
+              Chưa có lịch hẹn nào được kỹ thuật viên duyệt phù hợp.
             </p>
           ) : (
             <div className="admin-pick-list" role="listbox">

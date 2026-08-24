@@ -891,6 +891,40 @@ export const getAdminAppointments = async (params = {}) => {
   );
 };
 
+/**
+ * Admin OPERATIONAL eligible list: appointments that have been approved by
+ * the assigned therapist (CONFIRMED, IN_PROGRESS, COMPLETED). PENDING and
+ * CANCELLED rows are intentionally excluded. This is the picker used by
+ * Admin → Hóa đơn & thanh toán → Từ lịch hẹn: invoice creation requires an
+ * appointment the customer and therapist have both committed to, and the
+ * backend still rejects invoicing of CONFIRMED / IN_PROGRESS so the Admin
+ * cannot accidentally bill a half-finished session.
+ *
+ * Backed by GET /appointments/admin/eligible.
+ */
+export const getAdminEligibleAppointments = async (params = {}) => {
+  if (USE_MOCK_ADMIN_APPOINTMENTS) {
+    await _delay(200);
+    const { q } = params || {};
+    const term = String(q || '').toLowerCase();
+    const eligibleStatuses = ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED'];
+    return _appointmentsSeed
+      .filter((a) => eligibleStatuses.includes(a.status))
+      .filter((a) => !term
+        || (a.code || '').toLowerCase().includes(term)
+        || (a.customerName || '').toLowerCase().includes(term))
+      .map((a) => ({ ...a }));
+  }
+  const { q } = params || {};
+  const list = await safeList(apiClient.get('/appointments/admin/eligible'));
+  if (!q) return list;
+  const term = String(q).toLowerCase();
+  return list.filter((a) =>
+    (a.code || '').toLowerCase().includes(term)
+    || (a.customerName || '').toLowerCase().includes(term)
+  );
+};
+
 export const getAdminAppointmentById = async (id) => {
   if (USE_MOCK_ADMIN_APPOINTMENTS) {
     await _delay(120);
@@ -1452,6 +1486,7 @@ export default {
   deleteCosmetic,
   // Appointments
   getAdminAppointments,
+  getAdminEligibleAppointments,
   getAdminAppointmentById,
   // Inventory
   getInventory,

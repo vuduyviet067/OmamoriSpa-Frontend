@@ -307,6 +307,33 @@ export const updateAppointmentStatus = async (appointmentId, status) => {
   );
 };
 
+// ─── REJECT / CANCEL A WAITING APPOINTMENT ─────────────────────────────────────
+// Therapist-only: the KTV rejects a PENDING appointment they own. The
+// backend (PATCH /appointments/therapist/me/{id}/reject) verifies ownership
+// and current status (must be PENDING) before flipping to CANCELLED.
+export const rejectAppointment = async (appointmentId) => {
+  if (USE_MOCK) {
+    await _delay(300);
+    const apt = _findApt(appointmentId);
+    if (!apt) {
+      const err = new Error('Không tìm thấy ca trị liệu.');
+      err.response = { status: 404, data: { message: err.message } };
+      throw err;
+    }
+    if (apt.status !== APPOINTMENT_STATUS.PENDING) {
+      const err = new Error('Chỉ có thể từ chối lịch đang chờ xác nhận.');
+      err.response = { status: 400, data: { message: err.message } };
+      throw err;
+    }
+    return _updateApt(appointmentId, { status: APPOINTMENT_STATUS.CANCELLED });
+  }
+  const response = await apiClient.patch(
+    `/appointments/therapist/me/${appointmentId}/reject`,
+    {}
+  );
+  return normalizeAppointment(extractObject(response.data));
+};
+
 // ─── GET CUSTOMER TREATMENT HISTORY ───────────────────────────────────────────
 // Real backend endpoint: GET /appointments/therapist/me/therapy-records/customer/{customerId}
 // Returns records scoped to the calling therapist's appointments. Empty list is valid.
@@ -447,6 +474,7 @@ export default {
   getMySchedule,
   getAppointmentById,
   updateAppointmentStatus,
+  rejectAppointment,
   getCustomerTreatmentHistory,
   getPrescribableCosmetics,
   saveTreatmentJournal,
